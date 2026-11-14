@@ -1,0 +1,10 @@
+{
+  "description": "A game store website that helps gamers browse and discover games in one convenient place.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

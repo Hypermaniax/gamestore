@@ -1,0 +1,15 @@
+[Unit]
+Description=Backup database gamestore
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=gamestore
+Group=gamestore
+EnvironmentFile=/etc/gamestore/backup.env
+ExecStart=/opt/gamestore/deploy/backup-db.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/gamestore
+UMask=0077

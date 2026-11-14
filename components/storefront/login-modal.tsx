@@ -1,0 +1,310 @@
+// Login modal — wired to the real auth server action (no mock session).
+// Error codes from the service are mapped to Indonesian copy here, never in the service.
+
+'use client'
+
+import { useState, useTransition } from 'react'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { loginAction, requestPasswordResetAction } from '@/src/controllers/auth.controller'
+import { loginSchema, requestPasswordResetSchema } from '@/src/validation/auth'
+import { TotpLoginForm } from '@/components/totp-login-form'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { useStorefront } from './storefront-provider'
+
+const ERROR_COPY: Record<string, string> = {
+  INPUT_INVALID: 'Invalid data.',
+  CREDENTIALS_INVALID: 'Incorrect email/username or password.',
+  INVALID_SESSION: 'Invalid session.',
+  TOO_MANY_REQUESTS: 'Too many requests. Try again in a moment.',
+}
+
+type Mode = 'masuk' | 'lupa'
+
+export function LoginModal() {
+  const { loginOpen, setLoginOpen, setUser, setEmailTerverifikasi, notify, closeModals } =
+    useStorefront()
+  const router = useRouter()
+  const pathname = usePathname()
+  const [mode, setMode] = useState<Mode>('masuk')
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [totpChallenge, setTotpChallenge] = useState<string | null>(null)
+  const [resetPending, startReset] = useTransition()
+  const [resetError, setResetError] = useState<string | null>(null)
+  const [resetSent, setResetSent] = useState(false)
+
+  function resetState() {
+    setMode('masuk')
+    setError(null)
+    setTotpChallenge(null)
+    setResetError(null)
+    setResetSent(false)
+  }
+
+  function close() {
+    resetState()
+    setLoginOpen(false)
+  }
+
+  function openForgot() {
+    setMode('lupa')
+    setError(null)
+    setResetError(null)
+    setResetSent(false)
+  }
+
+  function backToLogin() {
+    setMode('masuk')
+    setResetError(null)
+    setResetSent(false)
+  }
+
+  function handleSubmit(formData: FormData) {
+    setError(null)
+    const parsed = loginSchema.safeParse({
+      usernameOrEmail: String(formData.get('identity') ?? ''),
+      password: String(formData.get('password') ?? ''),
+    })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
+      return
+    }
+
+    startTransition(async () => {
+      const result = await loginAction(parsed.data)
+
+      if (!result.ok) {
+        setError(ERROR_COPY[result.code] ?? 'Something went wrong. Try again.')
+        return
+      }
+      if (result.jalur === 'perlu-totp') {
+        setTotpChallenge(result.token)
+        return
+      }
+      if (result.jalur === 'perlu-setup-totp') {
+        close()
+        router.push(`/totp/setup?token=${encodeURIComponent(result.token)}`)
+        return
+      }
+
+      completeLogin(result)
+    })
+  }
+
+  function completeLogin(result: {
+    peran: string
+    username: string
+    emailVerified: boolean
+  }) {
+    if (result.peran === 'ADMIN') {
+      resetState()
+      closeModals()
+      router.push('/panel')
+      router.refresh()
+      return
+    }
+
+    setUser(result.username)
+    setEmailTerverifikasi(result.emailVerified)
+    resetState()
+    closeModals()
+    if (!pathname.startsWith('/accounts/')) router.refresh()
+    notify(`Welcome, ${result.username}`)
+  }
+
+  function handleForgotSubmit(formData: FormData) {
+    setResetError(null)
+    const parsed = requestPasswordResetSchema.safeParse({
+      email: String(formData.get('email') ?? ''),
+    })
+    if (!parsed.success) {
+      setResetError(parsed.error.issues[0]?.message ?? 'Invalid email.')
+      return
+    }
+
+    startReset(async () => {
+      const result = await requestPasswordResetAction(parsed.data)
+      if (!result.ok) {
+        setResetError(result.message)
+        return
+      }
+      setResetSent(true)
+    })
+  }
+
+  return (
+    <Dialog open={loginOpen} onOpenChange={(open) => !open && close()}>
+      <DialogContent
+        className="max-w-md gap-0 rounded-[28px] bg-popover p-7 text-popover-foreground shadow-2xl sm:max-w-md sm:p-9"
+      >
+      {mode === 'masuk' ? totpChallenge ? (
+        <div className="relative">
+          <DialogTitle className="sr-only">Two-step verification</DialogTitle>
+          <TotpLoginForm
+            challengeToken={totpChallenge}
+            onSuccess={(result) => completeLogin(result)}
+            onBack={() => {
+              setTotpChallenge(null)
+              setError(null)
+            }}
+          />
+        </div>
+      ) : (
+        <form
+          noValidate
+          action={handleSubmit}
+        >
+          <div className="mb-7">
+            <p className="text-xs font-bold uppercase tracking-[.18em] text-brand-deep">
+              Welcome
+            </p>
+            <DialogTitle className="mt-2 font-display text-3xl font-bold tracking-tight">
+              Sign in to NEXAPLAY
+            </DialogTitle>
+          </div>
+
+          <label htmlFor="modal-identity" className="text-xs font-bold">
+            Email or username
+          </label>
+          <Input
+            id="modal-identity"
+            name="identity"
+            autoFocus
+            autoComplete="username"
+            aria-invalid={!!error}
+            className="field mt-2"
+                placeholder="name@email.com"
+          />
+
+          <label htmlFor="modal-password" className="mt-5 block text-xs font-bold">
+            Password
+          </label>
+          <Input
+            id="modal-password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            aria-invalid={!!error}
+            className="field mt-2"
+            placeholder="At least 8 characters"
+          />
+
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={openForgot}
+              className="text-xs font-bold text-brand-deep underline-offset-4 hover:underline"
+            >
+              Forgot password?
+            </button>
+          </div>
+
+          {error && (
+            <p role="alert" className="mt-4 text-xs font-semibold text-destructive">
+              {error}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            disabled={pending}
+            className="mt-6 h-12 w-full rounded-xl bg-foreground text-sm font-bold text-background hover:bg-foreground hover:opacity-90"
+          >
+            {pending ? 'Processing…' : 'Sign in'}
+          </Button>
+
+          <p className="mt-5 text-center text-xs text-muted-foreground">
+            No account yet?{' '}
+            <Link
+              href="/register"
+              className="font-bold text-foreground underline-offset-4 hover:underline"
+            >
+              Sign up free
+            </Link>
+          </p>
+        </form>
+      ) : (
+        <form noValidate action={handleForgotSubmit}>
+          <div className="mb-7">
+            <p className="text-xs font-bold uppercase tracking-[.18em] text-brand-deep">
+              Recovery
+            </p>
+            <DialogTitle className="mt-2 font-display text-3xl font-bold tracking-tight">
+              Forgot password
+            </DialogTitle>
+          </div>
+
+          {resetSent ? (
+            <>
+              <div className="flex items-start gap-3 rounded-2xl border border-border bg-muted/40 p-4">
+                <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-brand-deep" />
+                <p className="text-sm text-muted-foreground">
+                  If that email is registered, a reset link has been sent. The link is valid for
+                  1 hour and all old sessions will be signed out once the password is changed.
+                </p>
+              </div>
+              <p className="mt-4 text-xs text-muted-foreground">
+                In development, the reset link appears in the server log.
+              </p>
+              <Button
+                type="button"
+                onClick={backToLogin}
+                className="mt-6 h-12 w-full rounded-xl bg-brand text-sm font-bold text-brand-ink hover:bg-brand hover:brightness-105 active:scale-[.99]"
+              >
+                Back to sign in
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Enter your account email. We will send a link to create a new password.
+              </p>
+
+              <label htmlFor="modal-reset-email" className="mt-7 block text-xs font-bold">
+                Email
+              </label>
+              <Input
+                id="modal-reset-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                autoFocus
+                disabled={resetPending}
+                aria-invalid={!!resetError}
+                className="field mt-2"
+            placeholder="name@email.com"
+              />
+
+              {resetError && (
+                <p role="alert" className="mt-4 text-xs font-semibold text-destructive">
+                  {resetError}
+                </p>
+              )}
+
+              <Button
+                type="submit"
+                disabled={resetPending}
+                className="mt-6 h-12 w-full rounded-xl bg-brand text-sm font-bold text-brand-ink hover:bg-brand hover:brightness-105 active:scale-[.99]"
+              >
+                {resetPending ? 'Sending…' : 'Send reset link'}
+              </Button>
+
+              <button
+                type="button"
+                onClick={backToLogin}
+                className="mt-4 flex w-full items-center justify-center gap-2 text-xs font-bold text-muted-foreground transition hover:text-foreground"
+              >
+                <ArrowLeft className="size-3.5" /> Back to sign in
+              </button>
+            </>
+          )}
+        </form>
+      )}
+      </DialogContent>
+    </Dialog>
+  )
+}

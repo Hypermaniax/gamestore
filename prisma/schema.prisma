@@ -1,0 +1,506 @@
+// 27 MVP tables — ref: docs/ERD.md (v10)
+// CHECK constraints, partial/expression indexes, GIN, and the generated tsvector column
+// are written as raw SQL in migrations — not here (ERD §6).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ══════════════════ RBAC & Pengguna (6 tabel) ══════════════════
+
+model Role {
+  id              BigInt           @id @default(autoincrement())
+  code            String           @db.VarChar(50)
+  name            String           @db.VarChar(100)
+  isSystem        Boolean          @default(false) @map("is_system")
+  users           User[]
+  roleMenus       RoleMenu[]
+  rolePermissions RolePermission[]
+
+  @@unique([code])
+  @@map("roles")
+}
+
+model User {
+  id                  BigInt    @id @default(autoincrement())
+  username            String    @db.VarChar(50)
+  email               String    @db.VarChar(255)
+  emailVerified       Boolean   @default(false) @map("email_verified")
+  passwordHash        String    @map("password_hash") @db.VarChar(255)
+  roleId              BigInt    @map("role_id")
+  active              Boolean   @default(true)
+  tokenVersion        Int       @default(0) @map("token_version")
+  totpSecretEncrypted Bytes?    @map("totp_secret_encrypted")
+  totpKeyVersion      String?   @map("totp_key_version") @db.VarChar(20)
+  totpLastStep        BigInt?   @map("totp_last_step")
+  totpActive          Boolean   @default(false) @map("totp_active")
+  totpFailures        Int       @default(0) @map("totp_failures")
+  totpLockedUntil     DateTime? @map("totp_locked_until") @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  role            Role                @relation(fields: [roleId], references: [id])
+  accountsCreated GameAccount[]       @relation("AccountCreator")
+  transactions    Transaction[]       @relation("Buyer")
+  voucherUsages   VoucherUsage[]
+  idempotencyKeys IdempotencyKey[]
+  refundsAdmin    Refund[]            @relation("RefundAdmin")
+  auditReveals    AuditReveal[]
+  adminAuditLogs  AdminAuditLog[]     @relation("Actor")
+  emailTokens     EmailToken[]
+  refreshTokens   RefreshToken[]
+  totpRecoveries  TotpRecovery[]
+  pagesPublished  StaticPageVersion[] @relation("Publisher")
+  settingsUpdated Setting[]
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model Menu {
+  id       BigInt  @id @default(autoincrement())
+  code     String  @db.VarChar(50)
+  name     String  @db.VarChar(100)
+  path     String  @db.VarChar(255)
+  icon     String? @db.VarChar(50)
+  order    Int     @map("sort_order")
+  parentId BigInt? @map("parent_id")
+  active   Boolean @default(true)
+  isSystem Boolean @default(false) @map("is_system")
+
+  parent   Menu?      @relation("MenuTree", fields: [parentId], references: [id])
+  children Menu[]     @relation("MenuTree")
+  grants   RoleMenu[]
+
+  @@unique([code])
+  @@index([parentId])
+  @@map("menus")
+}
+
+model Permission {
+  id       BigInt  @id @default(autoincrement())
+  code     String  @db.VarChar(100)
+  name     String  @db.VarChar(100)
+  isSystem Boolean @default(false) @map("is_system")
+
+  grants RolePermission[]
+
+  @@unique([code])
+  @@map("permissions")
+}
+
+model RoleMenu {
+  roleId    BigInt    @map("role_id")
+  menuId    BigInt    @map("menu_id")
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  role Role @relation(fields: [roleId], references: [id])
+  menu Menu @relation(fields: [menuId], references: [id])
+
+  @@id([roleId, menuId])
+  @@index([menuId])
+  @@map("role_menus")
+}
+
+model RolePermission {
+  roleId       BigInt    @map("role_id")
+  permissionId BigInt    @map("permission_id")
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// ══════════════════ Katalog (4 tabel) ══════════════════
+
+model GameType {
+  id     BigInt  @id @default(autoincrement())
+  code   String  @db.VarChar(20)
+  name   String  @db.VarChar(100)
+  order  Int     @default(0) @map("sort_order")
+  active Boolean @default(true)
+
+  games Game[]
+
+  @@unique([code])
+  @@map("game_types")
+}
+
+model Game {
+  id              BigInt  @id @default(autoincrement())
+  code            String  @db.VarChar(50)
+  name            String  @db.VarChar(100)
+  typeId          BigInt  @map("type_id")
+  iconUrl         String? @map("icon_url") @db.VarChar(500)
+  attributeSchema Json    @map("attribute_schema")
+  active          Boolean @default(true)
+
+  type     GameType      @relation(fields: [typeId], references: [id])
+  accounts GameAccount[]
+
+  @@unique([code])
+  @@index([typeId])
+  @@map("games")
+}
+
+model GameAccount {
+  id                   BigInt    @id @default(autoincrement())
+  slug                 String    @db.VarChar(150)
+  gameId               BigInt    @map("game_id")
+  title                String    @db.VarChar(200)
+  description          String?   @db.Text
+  price                Decimal   @db.Decimal(14, 0)
+  attributes           Json
+  status               String    @default("DELISTED") @db.VarChar(20)
+  credentialsEncrypted Bytes?    @map("credentials_encrypted")
+  keyVersion           String?   @map("key_version") @db.VarChar(20)
+  listedAt             DateTime? @map("listed_at") @db.Timestamptz(6)
+  deletedAt            DateTime? @map("deleted_at") @db.Timestamptz(6)
+  adminId              BigInt    @map("admin_id")
+  version              Int       @default(0)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  game         Game           @relation(fields: [gameId], references: [id])
+  admin        User           @relation("AccountCreator", fields: [adminId], references: [id])
+  photos       AccountPhoto[]
+  transactions Transaction[]
+
+  @@unique([slug])
+  @@index([gameId])
+  @@index([adminId])
+  @@map("game_accounts")
+}
+
+model AccountPhoto {
+  id        BigInt    @id @default(autoincrement())
+  accountId BigInt    @map("account_id")
+  url       String    @db.VarChar(500)
+  order     Int       @map("sort_order")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  account GameAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, order])
+  @@map("account_photos")
+}
+
+// ══════════════════ Diskon (3 tabel) ══════════════════
+
+model Promotion {
+  id          BigInt   @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  type        String   @db.VarChar(20)
+  value       Decimal  @db.Decimal(14, 2)
+  maxDiscount Decimal? @map("max_discount") @db.Decimal(14, 0)
+  scope       String   @db.VarChar(10)
+  targetId    BigInt?  @map("target_id")
+  startsAt    DateTime @map("starts_at") @db.Timestamptz(6)
+  endsAt      DateTime @map("ends_at") @db.Timestamptz(6)
+  active      Boolean  @default(true)
+
+  transactions Transaction[]
+
+  @@index([active, startsAt, endsAt])
+  @@map("promotions")
+}
+
+model Voucher {
+  id          BigInt   @id @default(autoincrement())
+  code        String   @db.VarChar(50)
+  type        String   @db.VarChar(20)
+  value       Decimal  @db.Decimal(14, 2)
+  quota       Int
+  used        Int      @default(0)
+  minPurchase Decimal? @map("min_purchase") @db.Decimal(14, 0)
+  maxDiscount Decimal? @map("max_discount") @db.Decimal(14, 0)
+  active      Boolean  @default(true)
+  validUntil  DateTime @map("valid_until") @db.Timestamptz(6)
+
+  usages       VoucherUsage[]
+  transactions Transaction[]
+
+  @@unique([code])
+  @@map("vouchers")
+}
+
+model VoucherUsage {
+  voucherId     BigInt    @map("voucher_id")
+  userId        BigInt    @map("user_id")
+  transactionId BigInt?   @map("transaction_id")
+  usedAt        DateTime  @default(now()) @map("used_at") @db.Timestamptz(6)
+  status        String    @default("TERPAKAI") @db.VarChar(20)
+  restoredAt    DateTime? @map("restored_at") @db.Timestamptz(6)
+
+  voucher     Voucher      @relation(fields: [voucherId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@id([voucherId, userId])
+  @@index([transactionId])
+  @@map("voucher_usages")
+}
+
+// ══════════════════ Transaksi & Pembayaran (6 tabel) ══════════════════
+
+model Transaction {
+  id                BigInt    @id @default(autoincrement())
+  code              String    @db.VarChar(50)
+  accountId         BigInt    @map("account_id")
+  buyerId           BigInt    @map("buyer_id")
+  initialPrice      Decimal   @map("initial_price") @db.Decimal(14, 0)
+  promotionId       BigInt?   @map("promotion_id")
+  promotionDiscount Decimal   @default(0) @map("promotion_discount") @db.Decimal(14, 0)
+  voucherId         BigInt?   @map("voucher_id")
+  voucherDiscount   Decimal   @default(0) @map("voucher_discount") @db.Decimal(14, 0)
+  total             Decimal   @db.Decimal(14, 0)
+  status            String    @default("RESERVED") @db.VarChar(20)
+  note              String?   @db.Text
+  termsVersion      Int       @map("terms_version")
+  termsAcceptedAt   DateTime  @map("terms_accepted_at") @db.Timestamptz(6)
+  receiptConfirmed  Boolean   @default(false) @map("receipt_confirmed")
+  confirmedAt       DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  confirmedBy       String?   @map("confirmed_by") @db.VarChar(10)
+  revealUntil       DateTime? @map("reveal_until") @db.Timestamptz(6)
+  warrantyStart     DateTime? @map("warranty_start") @db.Timestamptz(6)
+  version           Int       @default(0)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiredAt         DateTime? @map("expired_at") @db.Timestamptz(6)
+  paidAt            DateTime? @map("paid_at") @db.Timestamptz(6)
+
+  account         GameAccount      @relation(fields: [accountId], references: [id])
+  buyer           User             @relation("Buyer", fields: [buyerId], references: [id])
+  promotion       Promotion?       @relation(fields: [promotionId], references: [id])
+  voucher         Voucher?         @relation(fields: [voucherId], references: [id])
+  payments        Payment[]
+  refunds         Refund[]
+  auditReveals    AuditReveal[]
+  voucherUsages   VoucherUsage[]
+  idempotencyKeys IdempotencyKey[]
+
+  @@unique([code])
+  @@index([buyerId, createdAt])
+  @@index([paidAt])
+  @@map("transactions")
+}
+
+model Payment {
+  id             BigInt   @id @default(autoincrement())
+  transactionId  BigInt   @map("transaction_id")
+  method         String   @db.VarChar(10)
+  externalId     String   @map("external_id") @db.VarChar(80)
+  xenditId       String?  @map("xendit_id") @db.VarChar(80)
+  incomingFundId String?  @map("incoming_fund_id") @db.VarChar(120)
+  status         String   @default("PENDING") @db.VarChar(20)
+  reference      String?  @db.VarChar(255)
+  instructions   Json?
+  amount         Decimal  @db.Decimal(14, 0)
+  expiredAt      DateTime @map("expired_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  refunds     Refund[]
+
+  @@unique([externalId])
+  @@index([transactionId])
+  @@index([xenditId])
+  @@map("payments")
+}
+
+model Refund {
+  id            BigInt   @id @default(autoincrement())
+  paymentId     BigInt   @map("payment_id")
+  transactionId BigInt   @map("transaction_id")
+  amount        Decimal  @db.Decimal(14, 0)
+  fee           Decimal  @default(0) @db.Decimal(14, 0)
+  reference     String?  @db.VarChar(120)
+  note          String?  @db.Text
+  adminId       BigInt   @map("admin_id")
+  refundedAt    DateTime @map("refunded_at") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment     Payment     @relation(fields: [paymentId], references: [id])
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  admin       User        @relation("RefundAdmin", fields: [adminId], references: [id])
+
+  @@index([paymentId])
+  @@index([transactionId])
+  @@index([refundedAt])
+  @@map("refunds")
+}
+
+model WebhookEvent {
+  id             BigInt    @id @default(autoincrement())
+  type           String    @db.VarChar(30)
+  incomingFundId String    @map("incoming_fund_id") @db.VarChar(120)
+  rawPayload     Json?     @map("raw_payload")
+  status         String    @default("DITERIMA") @db.VarChar(20)
+  processedAt    DateTime? @map("processed_at") @db.Timestamptz(6)
+
+  @@unique([type, incomingFundId])
+  @@index([status])
+  @@map("webhook_events")
+}
+
+model IdempotencyKey {
+  userId           BigInt   @map("user_id")
+  key              String   @db.VarChar(120)
+  transactionId    BigInt?  @map("transaction_id")
+  status           String   @default("PROCESSING") @db.VarChar(20)
+  requestHash      String   @map("request_hash") @db.VarChar(64)
+  responseStatus   Int?     @map("response_status")
+  responseSnapshot Json?    @map("response_snapshot")
+  validUntil       DateTime @map("valid_until") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user        User         @relation(fields: [userId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@id([userId, key])
+  @@index([createdAt])
+  @@map("idempotency_keys")
+}
+
+model AuditReveal {
+  id            BigInt   @id @default(autoincrement())
+  transactionId BigInt   @map("transaction_id")
+  buyerId       BigInt   @map("buyer_id")
+  revealedAt    DateTime @default(now()) @map("revealed_at") @db.Timestamptz(6)
+  ip            String?  @db.Inet
+  userAgent     String?  @map("user_agent") @db.VarChar(300)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  buyer       User        @relation(fields: [buyerId], references: [id])
+
+  @@index([transactionId])
+  @@map("audit_reveals")
+}
+
+// ══════════════════ Sistem & Konten (8 tabel) ══════════════════
+
+model Theme {
+  id        BigInt  @id @default(autoincrement())
+  code      String  @db.VarChar(30)
+  name      String  @db.VarChar(100)
+  tokens    Json
+  logoUrl   String? @map("logo_url") @db.VarChar(500)
+  bannerUrl String? @map("banner_url") @db.VarChar(500)
+  active    Boolean @default(false)
+  isSystem  Boolean @default(false) @map("is_system")
+
+  @@unique([code])
+  @@map("themes")
+}
+
+model StaticPage {
+  id           BigInt   @id @default(autoincrement())
+  code         String   @db.VarChar(50)
+  title        String   @db.VarChar(200)
+  bodyMarkdown String   @map("body_markdown") @db.Text
+  version      Int      @default(0)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  versions StaticPageVersion[]
+
+  @@unique([code])
+  @@map("static_pages")
+}
+
+model StaticPageVersion {
+  pageId       BigInt   @map("page_id")
+  version      Int
+  title        String   @db.VarChar(200)
+  bodyMarkdown String   @map("body_markdown") @db.Text
+  publishedAt  DateTime @default(now()) @map("published_at") @db.Timestamptz(6)
+  publishedBy  BigInt   @map("published_by")
+
+  page      StaticPage @relation(fields: [pageId], references: [id])
+  publisher User       @relation("Publisher", fields: [publishedBy], references: [id])
+
+  @@id([pageId, version])
+  @@map("static_page_versions")
+}
+
+model EmailToken {
+  id         BigInt    @id @default(autoincrement())
+  userId     BigInt    @map("user_id")
+  type       String    @db.VarChar(30)
+  newEmail   String?   @map("new_email") @db.VarChar(255)
+  tokenHash  String    @map("token_hash") @db.VarChar(64)
+  validUntil DateTime  @map("valid_until") @db.Timestamptz(6)
+  usedAt     DateTime? @map("used_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([tokenHash])
+  @@index([userId])
+  @@map("email_tokens")
+}
+
+model AdminAuditLog {
+  id        BigInt   @id @default(autoincrement())
+  actorId   BigInt?  @map("actor_id")
+  action    String   @db.VarChar(80)
+  target    String   @db.VarChar(150)
+  detail    Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation("Actor", fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@map("admin_audit_logs")
+}
+
+model RefreshToken {
+  id                BigInt    @id @default(autoincrement())
+  userId            BigInt    @map("user_id")
+  hash              String    @db.VarChar(64)
+  familyId          String    @map("family_id") @db.Uuid
+  replacedAt        DateTime? @map("replaced_at") @db.Timestamptz(6)
+  replacedByTokenId BigInt?   @map("replaced_by_token_id")
+  device            String?   @db.VarChar(150)
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(6)
+  revoked           Boolean   @default(false)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user        User           @relation(fields: [userId], references: [id])
+  replacement RefreshToken?  @relation("RefreshRotation", fields: [replacedByTokenId], references: [id])
+  replaces    RefreshToken[] @relation("RefreshRotation")
+
+  @@unique([hash])
+  @@index([userId, familyId])
+  @@map("refresh_tokens")
+}
+
+model TotpRecovery {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt    @map("user_id")
+  hash      String    @db.VarChar(64)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("totp_recoveries")
+}
+
+model Setting {
+  key       String   @id @db.VarChar(60)
+  value     String?  @db.VarChar(500)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy BigInt?  @map("updated_by")
+
+  updatedByUser User? @relation(fields: [updatedBy], references: [id])
+
+  @@map("settings")
+}

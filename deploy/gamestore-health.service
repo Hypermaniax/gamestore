@@ -1,0 +1,12 @@
+[Unit]
+Description=Cek health gamestore
+
+[Service]
+Type=oneshot
+User=gamestore
+Group=gamestore
+EnvironmentFile=-/etc/gamestore/health.env
+ExecStart=/opt/gamestore/deploy/healthcheck.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
