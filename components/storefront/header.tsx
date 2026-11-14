@@ -92,6 +92,9 @@ export function Header() {
               How to buy
             </Link>
           )}
+          <Link href="/help" className="nav-link">
+            Help
+          </Link>
           <span className="rounded-full border border-brand-deep/40 bg-brand/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[.14em] text-brand-deep">
             {totalAccounts.toLocaleString('id-ID')} active accounts
           </span>
@@ -271,6 +274,13 @@ export function Header() {
               </Link>
             ),
           )}
+          <Link
+            href="/help"
+            onClick={() => setMobileOpen(false)}
+            className="block w-full rounded-xl px-4 py-3 text-left text-sm font-semibold hover:bg-muted"
+          >
+            Help & policies
+          </Link>
           {user ? (
             <>
               <div className="mt-2 rounded-2xl border border-border bg-background/40 p-3">

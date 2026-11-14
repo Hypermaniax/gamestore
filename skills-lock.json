@@ -1,42 +1,48 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "nextjs-cache-architecture": {
       "source": "mohamed-hossam1/nextjs-skills",
       "sourceType": "github",
       "skillPath": "skills/nextjs-cache-architecture/SKILL.md",
-      "computedHash": "1920a70af3f3ffb6036aaf91b667a54ff87775757cbd9fc6a1945b38c9e8a323"
+      "computedHash": "2868e1b3a4ffc914d136b67207268fb59f0e05c12c58a7517aa2c22ffe854e97"
+    },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "8513eb3b2c39b8d05ef4f47b32ef4d18280b93a5efb91d8df6272f7435034af5"
     },
     "security-review": {
       "source": "getsentry/skills",
       "sourceType": "github",
       "skillPath": "skills/security-review/SKILL.md",
-      "computedHash": "194b70d3a2a4e0b23a436866c95496457962d1a818c382c56e4912bcd0cc3424"
+      "computedHash": "4af8c6b37142b46cbbca40d5f5e6c505699b8785486a7306faf1b79dcce7ff47"
     },
     "shadcn": {
       "source": "shadcn-ui/ui",
       "sourceType": "github",
       "skillPath": "skills/shadcn/SKILL.md",
-      "computedHash": "b864a958765563321f485a96f4d59c0bb6539f4286ab6d8b8b66895b7ebd302d"
+      "computedHash": "388962d16c7a4f13aaeee0d8f128e50a87df8553d42ef7988c39c0e1c74a40e8"
     },
     "ui-taste": {
       "source": "uizze.sh",
       "sourceUrl": "https://uizze.sh/",
       "sourceType": "well-known",
-      "computedHash": "9a37107c51b6bf6e3bdc2675d559094619b1b03092f8466c32ffc8e0cb9c1d4a",
+      "computedHash": "85da37a788dc4b5b63411e5681403d930b1077604a20497739fa05c8d21f01fc",
       "wellKnownDigest": "sha256:f26d607ceb3f3a6fa8c98f8dbcb2b1aeb0392de1953e826bb8893d9e49983bf9"
     },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",
       "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
-      "computedHash": "411316b5893571bda59f1517b1fd639682cbbc26f8c804c08a071f2b7b864992"
+      "computedHash": "ff6863fc7c1be035b294703b2e7c90b2197548985ca4cb98f58740a7e84dc0cc"
     },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/web-design-guidelines/SKILL.md",
-      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+      "computedHash": "4f68ae07187fb0d1fb78c88b503d089da4cf5a9d9625d1f2e425b1590bf96d92"
     }
   }
 }

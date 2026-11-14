@@ -7,7 +7,6 @@ const LINK_GROUPS = [
     links: [
       ['All accounts', '/#catalog'],
       ['How it works', '/#how'],
-      ['Warranty', '/pages/warranty'],
     ],
   },
   {
@@ -15,12 +14,14 @@ const LINK_GROUPS = [
     links: [
       ['My account', '/account'],
       ['My orders', '/orders'],
-      ['Help center', '/pages/faq'],
     ],
   },
   {
-    title: 'Legal',
+    title: 'Help & policies',
     links: [
+      ['Help center', '/help'],
+      ['FAQ', '/pages/faq'],
+      ['Warranty & refund', '/pages/warranty'],
       ['Terms & conditions', '/pages/terms-and-conditions'],
       ['Privacy policy', '/pages/privacy'],
     ],

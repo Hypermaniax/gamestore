@@ -55,6 +55,7 @@ type GameTypeForm = {
 
 type GameEditor = { mode: 'create' | 'edit'; id?: string; form: GameForm }
 type GameTypeEditor = { mode: 'create' | 'edit'; id?: string; form: GameTypeForm }
+type NewGameType = { code: string; name: string }
 
 function emptyGame(gameTypes: GameType[]): GameForm {
   return {
@@ -68,6 +69,10 @@ function emptyGame(gameTypes: GameType[]): GameForm {
 
 function emptyGameType(): GameTypeForm {
   return { code: '', name: '', order: '0', active: true }
+}
+
+function emptyNewGameType(): NewGameType {
+  return { code: '', name: '' }
 }
 
 export function GameAdmin({
@@ -89,8 +94,22 @@ export function GameAdmin({
   const [notice, setNotice] = useState<string | null>(null)
   const [gameEditor, setGameEditor] = useState<GameEditor | null>(null)
   const [gameTypeEditor, setGameTypeEditor] = useState<GameTypeEditor | null>(null)
+  const [createdGameTypes, setCreatedGameTypes] = useState<GameType[]>([])
+  const [newTypeOpen, setNewTypeOpen] = useState(false)
+  const [newType, setNewType] = useState<NewGameType>(emptyNewGameType)
+  const [newTypeError, setNewTypeError] = useState<string | null>(null)
 
-  const activeGameTypes = gameTypes.filter((item) => item.active).length
+  const availableGameTypes = [
+    ...gameTypes,
+    ...createdGameTypes.filter((created) => !gameTypes.some((item) => item.id === created.id)),
+  ]
+  const activeGameTypes = availableGameTypes.filter((item) => item.active).length
+
+  function resetNewType() {
+    setNewTypeOpen(false)
+    setNewType(emptyNewGameType())
+    setNewTypeError(null)
+  }
 
   function run(task: () => Promise<{ ok: boolean; message?: string }>, message: string) {
     setError(null)
@@ -104,6 +123,7 @@ export function GameAdmin({
       setNotice(message)
       setGameEditor(null)
       setGameTypeEditor(null)
+      resetNewType()
       router.refresh()
     })
   }
@@ -111,12 +131,14 @@ export function GameAdmin({
   function openCreateGame() {
     setError(null)
     setNotice(null)
-    setGameEditor({ mode: 'create', form: emptyGame(gameTypes) })
+    resetNewType()
+    setGameEditor({ mode: 'create', form: emptyGame(availableGameTypes) })
   }
 
   function openEditGame(game: Game) {
     setError(null)
     setNotice(null)
+    resetNewType()
     setGameEditor({
       mode: 'edit',
       id: game.id,
@@ -134,6 +156,26 @@ export function GameAdmin({
     setError(null)
     setNotice(null)
     setGameTypeEditor({ mode: 'create', form: emptyGameType() })
+  }
+
+  function createInlineGameType() {
+    const code = newType.code.trim().toLowerCase()
+    const name = newType.name.trim()
+    const order = Math.min(9999, availableGameTypes.reduce((max, item) => Math.max(max, item.order), 0) + 1)
+    setNewTypeError(null)
+    startTransition(async () => {
+      const result = await createGameTypeAction({ code, name, order })
+      if (!result.ok) {
+        setNewTypeError(result.message ?? 'Could not create game type.')
+        return
+      }
+      const created: GameType = { id: result.id, code, name, order, active: true }
+      setCreatedGameTypes((items) => [...items, created])
+      setGameEditor((value) => value ? { ...value, form: { ...value.form, typeId: created.id } } : value)
+      setNewType(emptyNewGameType())
+      setNewTypeOpen(false)
+      router.refresh()
+    })
   }
 
   function openEditGameType(item: GameType) {
@@ -348,7 +390,7 @@ export function GameAdmin({
               <div>
                 <h2 className="font-display text-base font-semibold tracking-[-0.02em]">Game types</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {gameTypes.length} categories · {activeGameTypes} active
+                  {availableGameTypes.length} categories · {activeGameTypes} active
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={openCreateGameType} disabled={pending}>
@@ -356,11 +398,11 @@ export function GameAdmin({
                 Add
               </Button>
             </div>
-            {gameTypes.length === 0 ? (
+            {availableGameTypes.length === 0 ? (
               <p className="px-4 py-6 text-sm text-muted-foreground">No game types yet.</p>
             ) : (
               <div className="divide-y">
-                {gameTypes.map((item) => (
+                {availableGameTypes.map((item) => (
                   <div key={item.id} className="flex items-center gap-2 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{item.name}</p>
@@ -397,6 +439,7 @@ export function GameAdmin({
           if (!open && !pending) {
             setGameEditor(null)
             setError(null)
+            resetNewType()
           }
         }}
       >
@@ -426,16 +469,37 @@ export function GameAdmin({
                     onChange={(event) => setGameEditor((value) => value ? { ...value, form: { ...value.form, name: event.target.value } } : value)}
                     required
                   />
-                  <select
-                    aria-label="Game type"
-                    className="field h-10 px-3"
-                    value={gameEditor.form.typeId}
-                    onChange={(event) => setGameEditor((value) => value ? { ...value, form: { ...value.form, typeId: event.target.value } } : value)}
-                  >
-                    {gameTypes.filter((item) => item.active || item.id === gameEditor.form.typeId).map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </select>
+                  <div className="flex gap-2">
+                    <select
+                      aria-label="Game type"
+                      className="field h-10 min-w-0 flex-1 px-3"
+                      value={gameEditor.form.typeId}
+                      onChange={(event) => setGameEditor((value) => value ? { ...value, form: { ...value.form, typeId: event.target.value } } : value)}
+                    >
+                      {availableGameTypes.filter((item) => item.active || item.id === gameEditor.form.typeId).map((item) => (
+                        <option key={item.id} value={item.id}>{item.name}</option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 shrink-0"
+                      aria-expanded={newTypeOpen}
+                      disabled={pending}
+                      onClick={() => {
+                        if (newTypeOpen) {
+                          resetNewType()
+                          return
+                        }
+                        setNewTypeError(null)
+                        setNewTypeOpen(true)
+                      }}
+                    >
+                      <Plus className="size-4" />
+                      New type
+                    </Button>
+                  </div>
                   <Input
                     aria-label="Game icon URL"
                     placeholder="Icon URL (optional)"
@@ -443,6 +507,64 @@ export function GameAdmin({
                     onChange={(event) => setGameEditor((value) => value ? { ...value, form: { ...value.form, iconUrl: event.target.value } } : value)}
                   />
                 </div>
+
+                {newTypeOpen ? (
+                  <div className="space-y-3 rounded-xl border bg-muted/25 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">New game type</p>
+                        <p className="text-xs text-muted-foreground">It will be selected automatically for this game.</p>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]">
+                      <Input
+                        aria-label="New game type code"
+                        placeholder="Code, e.g. MOBA"
+                        value={newType.code}
+                        onChange={(event) => setNewType((value) => ({ ...value, code: event.target.value }))}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            if (!pending && newType.code.trim() && newType.name.trim()) createInlineGameType()
+                          }
+                        }}
+                        disabled={pending}
+                        required
+                      />
+                      <Input
+                        aria-label="New game type name"
+                        placeholder="Type name"
+                        value={newType.name}
+                        onChange={(event) => setNewType((value) => ({ ...value, name: event.target.value }))}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            if (!pending && newType.code.trim() && newType.name.trim()) createInlineGameType()
+                          }
+                        }}
+                        disabled={pending}
+                        required
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-10 flex-1 sm:flex-none"
+                          disabled={pending || !newType.code.trim() || !newType.name.trim()}
+                          onClick={createInlineGameType}
+                        >
+                          Create type
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" className="h-10" disabled={pending} onClick={resetNewType}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                    {newTypeError ? (
+                      <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{newTypeError}</p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <AttributeSchemaFields
                   fields={gameEditor.form.skema}
@@ -455,7 +577,7 @@ export function GameAdmin({
                 ) : null}
 
                 <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-                  <Button type="button" variant="ghost" disabled={pending} onClick={() => { setGameEditor(null); setError(null) }}>
+                  <Button type="button" variant="ghost" disabled={pending} onClick={() => { setGameEditor(null); setError(null); resetNewType() }}>
                     Cancel
                   </Button>
                   <Button type="submit" disabled={pending}>
