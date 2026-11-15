@@ -150,14 +150,21 @@ export function findForCheckoutBySlug(slug: string) {
   })
 }
 
-/** Full-text prefilter using the generated `cari` tsvector + GIN index. */
+/** Full-text prefilter using the generated `search_vector` tsvector + GIN index. */
 export async function searchIds(q: string): Promise<bigint[]> {
+  // Join the masters here as well: the LIMIT must not be consumed by accounts
+  // whose game/type is inactive, otherwise active matches can disappear.
   const rows = await prisma.$queryRaw<{ id: bigint }[]>`
-    SELECT id FROM game_accounts
-    WHERE search_vector @@ plainto_tsquery('simple', ${q})
-      AND status = 'AVAILABLE'
-      AND deleted_at IS NULL
-    ORDER BY id DESC
+    SELECT ga.id
+    FROM game_accounts ga
+    JOIN games g ON g.id = ga.game_id
+    JOIN game_types gt ON gt.id = g.type_id
+    WHERE ga.search_vector @@ plainto_tsquery('simple', ${q})
+      AND ga.status = 'AVAILABLE'
+      AND ga.deleted_at IS NULL
+      AND g.active = true
+      AND gt.active = true
+    ORDER BY ga.id DESC
     LIMIT 500
   `
   return rows.map((row) => row.id)

@@ -24,6 +24,48 @@ describe('katalog publik', () => {
     expect(rows.map((row) => row.id)).toEqual([murah.id, mahal.id])
     expect(await accountRepo.countPublic({})).toBe(2)
   })
+
+  it('menyembunyikan akun saat game atau type dinonaktifkan', async () => {
+    const { user, type, game } = await dasar()
+    const akun = await buatAkun({ gameId: game.id, adminId: user.id, status: 'AVAILABLE' })
+    const query = { sort: 'terbaru' as const, skip: 0, take: 10 }
+
+    await prisma.game.update({ where: { id: game.id }, data: { active: false } })
+    expect(await accountRepo.listPublic(query)).toEqual([])
+    expect(await accountRepo.countPublic({})).toBe(0)
+    expect(await accountRepo.findBySlugPublic(akun.slug)).toBeNull()
+    expect(await accountRepo.findForCheckoutBySlug(akun.slug)).toBeNull()
+
+    await prisma.game.update({ where: { id: game.id }, data: { active: true } })
+    await prisma.gameType.update({ where: { id: type.id }, data: { active: false } })
+    expect(await accountRepo.listPublic(query)).toEqual([])
+
+    await prisma.gameType.update({ where: { id: type.id }, data: { active: true } })
+    expect((await accountRepo.listPublic(query)).map((row) => row.id)).toEqual([akun.id])
+  })
+
+  it('pencarian full-text mengabaikan akun dari game nonaktif', async () => {
+    const { user, game } = await dasar()
+    const aktif = await buatAkun({ gameId: game.id, adminId: user.id, status: 'AVAILABLE' })
+
+    const inactiveType = await prisma.gameType.create({
+      data: { code: `off-${Date.now()}`, name: 'Jenis Nonaktif', active: false },
+    })
+    const inactiveGame = await prisma.game.create({
+      data: {
+        code: `off-${Date.now()}`,
+        name: 'Game Nonaktif',
+        typeId: inactiveType.id,
+        attributeSchema: [],
+      },
+    })
+    await buatAkun({ gameId: inactiveGame.id, adminId: user.id, status: 'AVAILABLE' })
+
+    const ids = await accountRepo.searchIds('Uji')
+
+    expect(ids).toContain(aktif.id)
+    expect(ids).toHaveLength(1)
+  })
 })
 
 describe('halaman statis', () => {
