@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { prisma, resetDb } from '../helpers/db'
 import { buatAkun, buatTransaksi, dasar } from '../helpers/fixtures'
 import {
@@ -10,17 +10,9 @@ import {
 } from '../../src/services/pdp.service'
 
 const DAY = 86_400_000
-let previousMigrationUrl: string | undefined
-
-beforeAll(() => {
-  previousMigrationUrl = process.env.MIGRATION_DATABASE_URL
-  process.env.MIGRATION_DATABASE_URL = process.env.TEST_MIGRATION_DATABASE_URL
-})
 
 beforeEach(resetDb)
 afterAll(async () => {
-  if (previousMigrationUrl === undefined) delete process.env.MIGRATION_DATABASE_URL
-  else process.env.MIGRATION_DATABASE_URL = previousMigrationUrl
   await prisma.$disconnect()
 })
 

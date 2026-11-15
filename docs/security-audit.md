@@ -31,7 +31,7 @@
 - `src/lib/session.ts:130-142` — `readSession()` never checks the `kind` claim or any token type.
 - `src/services/auth.service.ts:447-449` — password-only login returns a `totp2` challenge token.
 - `src/services/auth.service.ts:742-749` — `verifySession()` trusts whatever `readSession()` returns.
-- `app/panel/layout.tsx:9-11` and `app/(storefront)/account/page.tsx:16-17` — both rely on `verifySession()`.
+- `app/(secret)/panel/layout.tsx:9-11` and `app/(secret)/(storefront)/account/page.tsx:16-17` — both rely on `verifySession()`.
 
 **Confidence:** High
 
@@ -86,7 +86,7 @@ Anyone with a valid password — including a credential-stuffing attacker — ca
 - `src/services/user-admin.service.ts:92-102` — the self guard only blocks demotion, not self-promotion.
 - `src/services/auth.service.ts:684-701` — `refresh()` re-issues a session from the current DB role without checking TOTP.
 - `src/services/auth.service.ts:742-749` — `verifySession()` checks role/active/token version but not `totpActive`.
-- `app/panel/layout.tsx:9-11` — panel guard checks only `roleKode === 'ADMIN'`.
+- `app/(secret)/panel/layout.tsx:9-11` — panel guard checks only `roleKode === 'ADMIN'`.
 - `prisma/seed.ts:39` — `user:manage` is described as "Manage users: deactivate, force logout".
 
 **Confidence:** High in code behavior; exploit is conditional on a non-ADMIN role holding `user:manage`.
@@ -129,9 +129,9 @@ The default seed grants `user:manage` only to `ADMIN`, so this is conditional. I
 
 **Locations:**
 
-- `app/login/page.tsx:50`
+- `app/(public)/(auth)/login/page.tsx:50`
 - `components/storefront/login-modal.tsx:90`
-- `app/totp/setup/page.tsx:12-13`
+- `app/(public)/(auth)/totp/setup/page.tsx:12-13`
 - `src/services/auth.service.ts:598`
 
 **Confidence:** High in design; exploit requires token leakage.
@@ -223,7 +223,7 @@ The deletion transaction only clears `newEmail` on email tokens; it does not mar
 
 - `next.config.ts:7` allows `'unsafe-inline'` for `script-src` (and `'unsafe-eval'` in dev). No XSS vector was found, but a nonce/hash-based CSP would harden against future injection.
 - `package.json:41` lists `shadcn` as a production dependency. `npm audit --omit=dev` reports 2 low + 4 moderate transitives (`deepmerge` prototype poisoning, `minimatch` DoS via `shadcn`/`ts-morph`), with no high/critical findings. The package is CLI/tooling, not imported at runtime; move it to `devDependencies` and update/pin.
-- `.env.example:6,27` includes `MIGRATION_DATABASE_URL` and `SUPERADMIN_PASSWORD`. `src/services/pdp.service.ts:64` reads the migration URL. Ensure the web service's `EnvironmentFile` does not include DDL credentials or the seed superadmin password; use a separate CLI/ops env file and remove the seed password after the admin exists.
+- Development now intentionally uses one `DATABASE_URL` for app, migration, seed, and test. `.env.example` still includes `SUPERADMIN_PASSWORD`. For production, keep DDL credentials and the seed superadmin password out of the web service environment; use a separate CLI/ops env file and remove the seed password after the admin exists.
 
 ---
 
@@ -245,7 +245,7 @@ The deletion transaction only clears `newEmail` on email tokens; it does not mar
 
 - **Proxy/XFF configuration:** confirm the reverse proxy overwrites `X-Forwarded-For` or provides a trusted `X-Real-IP`. Until then, treat F-04 as exploitable.
 - **Role assignments:** query (read-only) for any non-ADMIN role granted `user:manage` or `totp:reset`. If present, treat F-02 as High.
-- **Production environment file:** confirm it does not contain `MIGRATION_DATABASE_URL`, `SUPERADMIN_PASSWORD`, or other post-seed/DDL credentials.
+- **Production environment file:** confirm it does not contain `SUPERADMIN_PASSWORD` or other post-seed/DDL credentials; development's single `DATABASE_URL` must not be reused with owner/DDL rights in production.
 - **Provider payloads:** confirm all supported Xendit callback shapes include an amount; otherwise F-05 needs a provider fetch before settlement.
 
 ---

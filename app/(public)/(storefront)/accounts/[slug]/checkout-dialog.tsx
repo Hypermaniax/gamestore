@@ -1,6 +1,7 @@
 'use client'
 
-import { X } from 'lucide-react'
+import Link from 'next/link'
+import { ShieldCheck, X } from 'lucide-react'
 import { useStorefront } from '@/components/storefront/storefront-provider'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,7 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { CheckoutDetailView, CheckoutView } from '@/src/lib/pesanan'
-import { CheckoutForm } from '../../checkout/[slug]/checkout-form'
+import { CheckoutForm } from '@/components/storefront/checkout-form'
 import { LoginToCheckout } from './login-to-checkout'
 
 export function CheckoutDialog({
@@ -28,6 +29,7 @@ export function CheckoutDialog({
   const checkoutData: CheckoutView | null = currentUser
     ? { ...data, user: currentUser }
     : null
+  const needsVerification = Boolean(currentUser && !currentUser.emailVerified)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,7 +65,26 @@ export function CheckoutDialog({
         </div>
 
         <div className="p-5 sm:p-7">
-          {checkoutData ? (
+          {needsVerification ? (
+            <div className="rounded-2xl border border-border bg-muted/30 p-5 sm:p-6">
+              <span className="grid size-11 place-items-center rounded-xl bg-brand/15 text-brand-deep">
+                <ShieldCheck className="size-5" aria-hidden="true" />
+              </span>
+              <h2 className="mt-4 font-display text-xl font-bold tracking-tight">
+                Verify your email first
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Your account must be verified before you can buy. Verify the email on your account,
+                then continue checkout.
+              </p>
+              <Link
+                href={`/verify-email?next=${encodeURIComponent(`/accounts/${data.account.slug}`)}`}
+                className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink transition hover:brightness-105 active:scale-[.99]"
+              >
+                Verify email
+              </Link>
+            </div>
+          ) : checkoutData ? (
             <CheckoutForm data={checkoutData} showProductCard={false} />
           ) : (
             <LoginToCheckout title={data.account.title} />

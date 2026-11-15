@@ -1,4 +1,4 @@
-// Runtime Prisma client — app-level DB user (DML only), ref docs/PLAN.md §3/§14.
+// Runtime Prisma client — the single DATABASE_URL connection.
 // Prisma 7 uses a driver adapter (no native query engine).
 
 import { PrismaPg } from '@prisma/adapter-pg'

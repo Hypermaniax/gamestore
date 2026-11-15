@@ -346,10 +346,23 @@ Kredensial akun game fixture:
 npx tsc --noEmit
 npm run lint
 npm run build
-npm run test
+ALLOW_DESTRUCTIVE_TESTS=1 npm run test
 ```
 
-Tes integrasi memakai database `gamestore_test`: global setup menghapus schema, menjalankan seluruh migration dari nol, lalu mereset tabel antar-test. File tes ada di `tests/unit` dan `tests/integration`.
+Tes integrasi memakai `DATABASE_URL` yang sama: global setup menghapus schema, menjalankan seluruh migration dari nol, lalu mereset tabel antar-test. Karena ini destruktif, tes hanya berjalan dengan `ALLOW_DESTRUCTIVE_TESTS=1`:
+
+```bash
+ALLOW_DESTRUCTIVE_TESTS=1 npm run test
+```
+
+File tes ada di `tests/unit` dan `tests/integration`.
+
+Migration dan seed dasar memakai perintah default Prisma:
+
+```bash
+npx prisma migrate deploy
+npx prisma db seed
+```
 
 Seed ulang data testing:
 

@@ -28,9 +28,11 @@ const initialState: VerifyEmailFormState = { ok: false, action: null, error: nul
 export function VerifyEmailForm({
   email,
   initialCooldown = 0,
+  next,
 }: {
   email: string
   initialCooldown?: number
+  next?: string | null
 }) {
   const [code, setCode] = useState('')
   const [otpKey, setOtpKey] = useState(0)
@@ -86,10 +88,10 @@ export function VerifyEmailForm({
         </p>
         <div className="mt-7 flex flex-col gap-3 sm:flex-row">
           <Link
-            href="/account"
+            href={next ?? '/account'}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink transition hover:brightness-105 active:scale-[.99]"
           >
-            Back to account
+            {next ? 'Continue' : 'Back to account'}
             <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
           <Link

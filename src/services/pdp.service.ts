@@ -61,9 +61,9 @@ export async function anonimkanAuditReveal(input: {
     return { ok: false, code: 'CONFIRMATION_MISMATCH', message: 'PDP procedure confirmation does not match.' }
   const bulan = Math.max(1, Math.floor(input.bulan ?? Number(process.env.RETENSI_AUDIT_PII_BULAN ?? 24)))
   const cutoff = new Date(realClock.now().getTime() - bulan * 30 * 86_400_000)
-  const url = process.env.MIGRATION_DATABASE_URL
+  const url = process.env.DATABASE_URL
   if (!url)
-    return { ok: false, code: 'CONNECTION_NOT_READY', message: 'MIGRATION_DATABASE_URL is not set.' }
+    return { ok: false, code: 'CONNECTION_NOT_READY', message: 'DATABASE_URL is not set.' }
 
   const result = await pdpRepo.anonimkanAuditReveal({
     connectionString: url,

@@ -1,5 +1,5 @@
-// PDP data-level operations. User anonymisation uses the app user (business rows
-// stay); audit PII anonymisation requires the migration/DDL user.
+// PDP data-level operations. Both user anonymisation and audit PII anonymisation
+// use the single DATABASE_URL connection.
 
 import { Client } from 'pg'
 import { prisma } from '../lib/prisma'

@@ -20,6 +20,17 @@ const ERROR_COPY: Record<string, string> = {
 
 const initialState: LoginFormState = { error: null }
 
+function safeNext(value: string | null): string | null {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return null
+  if (value.includes('\\') || /[\u0000-\u001f\u007f]/.test(value)) return null
+  return value
+}
+
+function nextFromLocation(): string | null {
+  if (typeof window === 'undefined') return null
+  return safeNext(new URLSearchParams(window.location.search).get('next'))
+}
+
 export default function LoginForm() {
   const router = useRouter()
   const [challengeToken, setChallengeToken] = useState<string | null>(null)
@@ -28,7 +39,12 @@ export default function LoginForm() {
       const result = await loginFormAction(prevState, formData)
       if (result.challengeToken) setChallengeToken(result.challengeToken)
       if (result.redirectTo) {
-        router.push(result.redirectTo)
+        const next = nextFromLocation()
+        const target =
+          next && !result.redirectTo.startsWith('/totp/setup')
+            ? next
+            : result.redirectTo
+        router.push(target)
         router.refresh()
       }
       return result
@@ -38,7 +54,7 @@ export default function LoginForm() {
   const error = state.error ? (ERROR_COPY[state.code ?? ''] ?? state.error) : null
 
   function handleTotpSuccess(result: { peran: string }) {
-    router.push(result.peran === 'ADMIN' ? '/panel' : '/')
+    router.push(nextFromLocation() ?? (result.peran === 'ADMIN' ? '/panel' : '/'))
     router.refresh()
   }
 

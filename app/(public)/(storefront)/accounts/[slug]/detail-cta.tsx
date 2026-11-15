@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ArrowRight, LockKeyhole } from 'lucide-react'
 import { useStorefront } from '@/components/storefront/storefront-provider'
 import { Button } from '@/components/ui/button'
@@ -14,17 +15,31 @@ export function DetailCheckoutButton({
   data: CheckoutDetailView
   className?: string
 }) {
-  const { user } = useStorefront()
+  const { user, emailVerified } = useStorefront()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
+  const needsVerification = data.user
+    ? !data.user.emailVerified
+    : Boolean(user && !emailVerified)
+
+  function openCheckout() {
+    if (needsVerification) {
+      router.push(`/verify-email?next=${encodeURIComponent(`/accounts/${data.account.slug}`)}`)
+      return
+    }
+    setOpen(true)
+  }
 
   return (
     <>
       <Button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openCheckout}
         className={`group h-14 w-full justify-center gap-3 rounded-2xl bg-brand pl-5 pr-2 text-sm font-bold text-brand-ink shadow-[0_20px_40px_-22px_rgba(200,255,54,.8)] hover:bg-brand hover:brightness-105 active:scale-[.99] ${className}`}
       >
-        <span>{user ? 'Continue to checkout' : 'Sign in & checkout'}</span>
+        <span>
+          {needsVerification ? 'Verify email to checkout' : user ? 'Continue to checkout' : 'Sign in & checkout'}
+        </span>
         <span className="grid size-9 place-items-center rounded-full bg-brand-ink text-brand transition duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:-translate-y-0.5 group-hover:translate-x-0.5">
           <ArrowRight className="size-4" strokeWidth={1.75} />
         </span>
@@ -35,9 +50,21 @@ export function DetailCheckoutButton({
 }
 
 export function MobileCheckoutBar({ data }: { data: CheckoutDetailView }) {
-  const { user } = useStorefront()
+  const { user, emailVerified } = useStorefront()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [footerVisible, setFooterVisible] = useState(false)
+  const needsVerification = data.user
+    ? !data.user.emailVerified
+    : Boolean(user && !emailVerified)
+
+  function openCheckout() {
+    if (needsVerification) {
+      router.push(`/verify-email?next=${encodeURIComponent(`/accounts/${data.account.slug}`)}`)
+      return
+    }
+    setOpen(true)
+  }
 
   useEffect(() => {
     const footer = document.querySelector('footer')
@@ -69,10 +96,10 @@ export function MobileCheckoutBar({ data }: { data: CheckoutDetailView }) {
           </div>
           <Button
             type="button"
-            onClick={() => setOpen(true)}
+            onClick={openCheckout}
             className="group ml-auto h-11 shrink-0 gap-2.5 rounded-[1rem] bg-brand pl-4 pr-1.5 text-sm font-bold text-brand-ink hover:bg-brand hover:brightness-105 active:scale-[.99]"
           >
-            <span>{user ? 'Checkout' : 'Sign in'}</span>
+            <span>{needsVerification ? 'Verify' : user ? 'Checkout' : 'Sign in'}</span>
             <span className="grid size-8 place-items-center rounded-full bg-brand-ink text-brand">
               <ArrowRight className="size-3.5" strokeWidth={1.75} />
             </span>

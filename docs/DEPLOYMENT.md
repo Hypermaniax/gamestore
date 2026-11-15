@@ -22,7 +22,7 @@ sudo install -o root -g gamestore -m 0600 totp-emergency.token /etc/gamestore/to
 - Produksi wajib: `APP_BASE_URL=https://...`, `TOTP_WAJIB_ADMIN=true`, `MAIL_HOST`, `MAIL_FROM`,
   `ADMIN_EMAIL`, `XENDIT_CALLBACK_TOKEN`. `instrumentation.ts` menolak startup bila salah satu
   kosong atau `APP_BASE_URL` bukan HTTPS.
-- Langkah aman: `npm ci`, `npm run db:seed` (hanya sekali), `npm run build`, lalu pasang unit systemd.
+- Langkah aman: `npm ci`, `npx prisma migrate deploy`, `npx prisma db seed` (hanya sekali), `npm run build`, lalu pasang unit systemd.
 
 ## 2. Header & transport
 
@@ -68,13 +68,11 @@ npm run totp:darurat -- --username superadmin --alasan "perangkat hilang"
 - `RetensiJob` harian (`30 2 * * *`) mengosongkan `webhook_events.raw_payload` setelah 90 hari
   (hanya `DIPROSES`), `idempotency_keys.response_snapshot` setelah 30 hari `KEDALUWARSA`, menghapus
   `refresh_tokens` per family yang seluruhnya kedaluwarsa + 30 hari, dan `email_tokens` + 30 hari.
-- Anonimisasi `audit_reveals.ip`/`user_agent` memakai user DDL:
+- Anonimisasi `audit_reveals.ip`/`user_agent` memakai `DATABASE_URL`:
 
 ```bash
-PDP_KONFIRMASI=ANONIMISASI-AUDIT MIGRATION_DATABASE_URL=... \
-  npm run pdp:anonim-audit -- --dry-run
-PDP_KONFIRMASI=ANONIMISASI-AUDIT MIGRATION_DATABASE_URL=... \
-  npm run pdp:anonim-audit
+PDP_KONFIRMASI=ANONIMISASI-AUDIT npm run pdp:anonim-audit -- --dry-run
+PDP_KONFIRMASI=ANONIMISASI-AUDIT npm run pdp:anonim-audit
 ```
 
 - Penghapusan data pribadi manual (transaksi tetap disimpan tanpa identitas):

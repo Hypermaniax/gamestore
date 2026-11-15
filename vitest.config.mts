@@ -2,8 +2,8 @@ import 'dotenv/config'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
-const testUrl = process.env.TEST_DATABASE_URL
-if (!testUrl) throw new Error('TEST_DATABASE_URL wajib diisi untuk menjalankan tes.')
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) throw new Error('DATABASE_URL wajib diisi untuk menjalankan tes.')
 
 export default defineConfig({
   resolve: {
@@ -12,7 +12,7 @@ export default defineConfig({
   test: {
     globalSetup: ['./tests/global-setup.ts'],
     env: {
-      DATABASE_URL: testUrl,
+      DATABASE_URL: databaseUrl,
       NODE_ENV: 'test',
       XENDIT_SECRET_KEY: '',
       ADMIN_EMAIL: '',

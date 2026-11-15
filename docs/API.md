@@ -8,7 +8,7 @@
 > server component memanggil service; komponen klien memanggil Server Actions (`app/actions/*`).
 > Tabel memakai **penamaan HTTP (Method + Path) hanya sebagai indeks kejelasan** — kenyataannya
 > semua baris adalah aksi/module: `POST /transactions` → aksi `transactions`, `GET /accounts` → baca via
-> server component/aksi pembaca. **UI panel berada di `/panel/*`** (folder `app/panel/` — bukan
+> server component/aksi pembaca. **UI panel berada di `/panel/*`** (folder `app/(secret)/panel/` — bukan
 > `/admin`). Dua pengecualian **tetap benar HTTP**: `POST /payments/webhook/xendit`
 > (callback dari server Xendit) dan `GET /health` (uptime check).
 

@@ -81,7 +81,7 @@ Satu aplikasi full-stack dalam satu repo:
 | 5 | **Tabel `static_page_versions`** (append-only) — skema **30 tabel (MVP 28)** | `terms_version` hanya angka; teks yang disetujui hilang saat halaman diedit (bukti sengketa) |
 | 6 | **Kuota voucher atomik + CHECK**; **`payments.external_id` per tagihan**; `webhook_events.xendit_id` → **`incoming_fund_id`** | Race kuota terakhir; `changeMethod` membuat tagihan baru dengan `external_id` sama; `xendit_id` berarti dua hal berbeda |
 | 7 | **TOTP**: alur `perlu_setup_totp` saat wajib, `totp_failures`/`totp_locked_until`, `/auth/totp/recovery-baru` | Admin baru tak punya jalan setup saat flag wajib; kunci sementara tak punya penyimpanan; recovery code tak bisa diregenerasi |
-| 8 | **Retensi data** (§6) + `RetensiJob` + prosedur anonimisasi audit via user DDL | `idempotency_keys`/`webhook_events` tumbuh tanpa batas (v8 melarang hapus); IP/UA di bukti audit vs UU PDP |
+| 8 | **Retensi data** (§6) + `RetensiJob` + prosedur anonimisasi audit via `DATABASE_URL` | `idempotency_keys`/`webhook_events` tumbuh tanpa batas (v8 melarang hapus); IP/UA di bukti audit vs UU PDP |
 | 9 | **Aturan hapus**: akun hanya saat `DELISTED`, master = flip `active`, katalog memfilter `deleted_at` | Soft delete akun `AVAILABLE` tetap tampil di katalog; "CRUD" master tak jelas artinya |
 | 10 | **Promo seri** → potongan rupiah terbesar; potongan persen **floor** | Tie-break & pembulatan belum ditentukan |
 | 11 | **Sinkron dokumen**: kardinalitas ERD, string versi, label fase (tema), tahap tiap endpoint MVP, permission `:read`, 4 index baru, CHECK `receipt_confirmed`/`confirmed_*`, keputusan #2/#3 pindah ke Terkunci | Dokumen saling bertentangan / ada endpoint tanpa tahap |
@@ -113,7 +113,7 @@ Satu aplikasi full-stack dalam satu repo:
 - **Voucher dikonsumsi ulang saat telat-bayar** (reserve-ulang → `PAID`); gagal → `NEEDS_REFUND`
 - **`REFUNDED` hanya bila Σ refund pembayaran utama = jumlah dibayar**; refund parsial menyisakan "sisa refund"
 - **`external_id` Xendit per tagihan** (kode transaksi + nomor urut), bukan per transaksi
-- **Panel admin di URL `/panel`** (bukan `/admin`): folder `app/panel/`; guard = server component di layout (sesi ADMIN; bila bukan → redirect login); halaman dalam panel juga dicek per permission; sidebar = tabel `menus`+`role_menus` dari DB
+- **Panel admin di URL `/panel`** (bukan `/admin`): folder `app/(secret)/panel/`; guard = server component di layout (sesi ADMIN; bila bukan → redirect login); halaman dalam panel juga dicek per permission; sidebar = tabel `menus`+`role_menus` dari DB
 - **Teks S&K yang disetujui disimpan** di `static_page_versions` (append-only)
 - **Framework frontend: Next.js (React + TypeScript) + Tailwind CSS + shadcn/ui** — zod + tipe shared untuk fe & API (satu aplikasi); frontend tidak memuat logika harga/status
 
@@ -141,7 +141,7 @@ Reverse proxy (Caddy/Nginx)  ── satu domain
 
 ```
 repo/                    # aplikasi di ROOT (tanpa subfolder be/fe/web)
-├── app/                 # RUTE & HALAMAN SAJA (SSR) + app/panel/ + 2 rute HTTP: webhook xendit & health
+├── app/                 # RUTE & HALAMAN SAJA (SSR) + app/(secret)/panel/ + 2 rute HTTP: webhook xendit & health
 ├── components/           # UI: shadcn (`ui/`) + `storefront/` (header, hero, katalog, modal, footer)
 ├── src/                  # BACKEND (3 layer)
 │   ├── controllers/      # layer 1: Server Actions ("use server") — terima dari client, mis. auth.controller.ts
@@ -179,8 +179,8 @@ Sebagian segmen di panel memakai `export const instant = false` (akses cookie ha
 | rate-limiter-flexible (in-memory) | Rate limit per-IP dan per-user — **bucket terpisah: login, checkout, polling, webhook**; cukup single-instance |
 | node:crypto (AES-GCM) | IV 12 byte acak, AAD = `akun:<id>`, keyring `key_version → key`, key dari file/secret |
 | node-cron + `instrumentation.ts` | Job terjadwal (Expiry, AutoKonfirmasi, Rekonsiliasi, Retensi, WebhookRetry, Idempotency); lock job di database (pg advisory lock) — relevan bila multi-instance |
-| Vitest + DB test lokal | Integration test; DB `gamestore_test` di Postgres native, migrasi dari nol via `prisma migrate deploy` tiap suite; mock server Xendit untuk webhook suite |
-| PostgreSQL 18 native | Server berjalan di host — **tanpa Docker**; DB dev/test + user DML-only & DDL dibuat via SQL |
+| Vitest + DB lokal | Integration test memakai `DATABASE_URL` yang sama; global setup drop schema + `prisma migrate deploy`; wajib `ALLOW_DESTRUCTIVE_TESTS=1`; mock server Xendit untuk webhook suite |
+| PostgreSQL 18 native | Server berjalan di host — **tanpa Docker**; satu database dev dipakai aplikasi, migration, seed, dan test |
 | Docker | ~~dibuang~~ — Postgres, Mailpit, dan app semuanya berjalan native di host (keputusan v11: Docker terlalu berat) |
 
 ### Frontend (bagian dari aplikasi yang sama)
@@ -277,7 +277,7 @@ Aturan tambahan telat-bayar: jumlah yang sudah dibayar **final** (snapshot tidak
 
 ## 6. Skema Database (30 tabel; MVP = 28, Fase 2 menambah 2)
 
-Aturan umum: rupiah `numeric(14,0)`; semua waktu `timestamptz`; `CHECK` constraint di database (`harga > 0`, `potongan >= 0`, `total > 0`, status dibatasi enum, persen 1–100). Aplikasi memakai user Postgres **DML-only**; `prisma migrate` memakai user **DDL** terpisah. Email unik tanpa peduli besar-kecil huruf: unique index pada `lower(email)` ( atau kolom citext).
+Aturan umum: rupiah `numeric(14,0)`; semua waktu `timestamptz`; `CHECK` constraint di database (`harga > 0`, `potongan >= 0`, `total > 0`, status dibatasi enum, persen 1–100). Development memakai satu `DATABASE_URL`; production sebaiknya memakai user aplikasi **DML-only** dan user **DDL** terpisah untuk `prisma migrate`. Email unik tanpa peduli besar-kecil huruf: unique index pada `lower(email)` ( atau kolom citext).
 
 **Kebijakan soft delete (v8): rekord bisnis tidak pernah dihapus fisik** — penghapusan memakai penanda: kolom `deleted_at`, flip `status`, flip `active` (tabel master: `game_types`, `games`, `vouchers`, `promotions`, `themes`, `menus`, `users` — "DELETE" di API = `active=false`), atau `revoked_at` (grant RBAC). Pengecualian mutlak: tabel audit (`admin_audit_logs`, `audit_reveals`) dan `static_page_versions` **tidak bisa dihapus sama sekali** — bahkan soft delete tidak ada (append-only, REVOKE UPDATE/DELETE). **Data teknis sementara** (`refresh_tokens`, `email_tokens`, `email_otps`) bukan rekord bisnis — dibersihkan `RetensiJob` (lihat "Retensi data").
 
@@ -561,7 +561,7 @@ Sidebar dirender dari menu di database (server component, tabel `role_menus`): a
 | 6 | Konten + laporan MVP | Halaman statis (draf → terbit = versi beku di `static_page_versions`, baca versi lama, persetujuan), tema **statis** seed + terang/gelap, laporan: **penjualan + penjualan-per-game + refund** (per-jenis/lama-terjual/stale/diskon 🔵) | Tes dengan `Clock` yang dimanipulasi |
 | 7 | Frontend toko | Katalog, detail, auth, checkout, halaman bayar, pesanan, reveal, tema; **tipe & validasi zod dibagikan** (satu aplikasi) | Alur beli end-to-end di browser dengan simulasi webhook |
 | 8 | Frontend admin | Panel admin dari menu database; antrean refund/sengketa | Admin menjalankan semua kelola tanpa curl |
-| 9 | Integrasi dan regresi | DB test lokal (Postgres native, migrasi dari nol), mock Xendit, tes `prisma migrate deploy` dari nol, regresi seluruh suite | `npm run test` hijau |
+| 9 | Integrasi dan regresi | DB lokal yang sama via `DATABASE_URL` (migrasi dari nol), mock Xendit, tes `prisma migrate deploy` dari nol, regresi seluruh suite | `ALLOW_DESTRUCTIVE_TESTS=1 npm run test` hijau |
 | 10 | Hardening produksi | Checklist bagian 14, **Wajibkan TOTP admin (`TOTP_WAJIB_ADMIN=true`) + uji prosedur darurat CLI** 🔴 | Semua tercentang |
 
 ### Fase 2 🔵 (setelah MVP hidup)
@@ -577,8 +577,7 @@ Sidebar dirender dari menu di database (server component, tabel `role_menus`): a
 
 | Variabel | Fungsi |
 |---|---|
-| `DATABASE_URL` | Koneksi aplikasi (DML-only) |
-| `MIGRATION_DATABASE_URL` | User DDL untuk `prisma migrate deploy` (+ shadow database) |
+| `DATABASE_URL` | Satu koneksi untuk aplikasi, migration, seed, dan test (dev) |
 | `JWT_SECRET_FILE` | Secret JWT (≥ 256 bit); app gagal start bila kosong/default |
 | `AES_KEYRING_FILE` | Keyring `key_version → key` |
 | `XENDIT_SECRET_KEY`, `XENDIT_CALLBACK_TOKEN`, `XENDIT_BASE_URL` | Sandbox → live cukup ganti nilai |
@@ -611,7 +610,7 @@ Nilai rahasia tidak pernah di-commit; di produksi memakai file read-only (`chmod
 - [ ] File migration Prisma yang sudah di-apply tidak pernah diedit
 - [x] **Alert dasar**: webhook `GAGAL` melewati batas percobaan, `RESERVED` menggantung, job terjadwal berhenti (heartbeat); **uptime check eksternal** ke endpoint health (monitor eksternal operator)
 - [x] **Tabel bukti append-only** (`admin_audit_logs`, `audit_reveals`, `static_page_versions`): REVOKE UPDATE/DELETE untuk user aplikasi
-- [ ] **Prosedur PDP manual**: permintaan penghapusan data lewat CS + kebijakan retensi (transaksi tetap disimpan tanpa identitas) tertulis sebelum go-live; **prosedur anonimisasi `audit_reveals` (user DDL) pernah diuji di staging dan `RetensiJob` berjalan** (CLI + tes DB selesai; uji staging operator)
+- [ ] **Prosedur PDP manual**: permintaan penghapusan data lewat CS + kebijakan retensi (transaksi tetap disimpan tanpa identitas) tertulis sebelum go-live; **prosedur anonimisasi `audit_reveals` (via `DATABASE_URL`) pernah diuji di staging dan `RetensiJob` berjalan** (CLI + tes DB selesai; uji staging operator)
 
 ## 15. Risiko Bisnis (sebelum go-live)
 

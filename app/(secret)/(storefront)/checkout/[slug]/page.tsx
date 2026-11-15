@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, LockKeyhole } from 'lucide-react'
 import { checkoutService } from '@/src/services/checkout.service'
-import { CheckoutForm } from './checkout-form'
+import { CheckoutForm } from '@/components/storefront/checkout-form'
 
 export const instant = false
 
@@ -19,6 +19,8 @@ export default async function CheckoutPage({
 
   if (!result.ok) {
     if (result.code === 'INVALID_SESSION') redirect('/login')
+    if (result.code === 'EMAIL_NOT_VERIFIED')
+      redirect(`/verify-email?next=${encodeURIComponent(`/checkout/${slug}`)}`)
     if (result.code === 'ACCOUNT_UNAVAILABLE' || result.code === 'INPUT_INVALID')
       notFound()
     return (

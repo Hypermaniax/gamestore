@@ -6,8 +6,22 @@ import { AuthShell } from '@/components/auth-shell'
 import { VerifyEmailForm } from '@/components/verify-email-form'
 import { authService } from '@/src/services/auth.service'
 
-export default async function VerifyEmailPage() {
-  const profile = await authService.profile()
+function safeNext(value: string | string[] | undefined): string | null {
+  const next = Array.isArray(value) ? value[0] : value
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return null
+  return next
+}
+
+export default async function VerifyEmailPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>
+}) {
+  const [{ next: rawNext }, profile] = await Promise.all([
+    searchParams,
+    authService.profile(),
+  ])
+  const next = safeNext(rawNext)
 
   if (!profile.ok) {
     return (
@@ -53,10 +67,10 @@ export default async function VerifyEmailPage() {
         {verified ? (
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/account"
+              href={next ?? '/account'}
               className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink transition hover:brightness-105 active:scale-[.99]"
             >
-              Back to account
+              {next ? 'Continue' : 'Back to account'}
             </Link>
             <Link
               href="/"
@@ -66,7 +80,7 @@ export default async function VerifyEmailPage() {
             </Link>
           </div>
         ) : (
-          <VerifyEmailForm email={profile.email} initialCooldown={cooldown} />
+          <VerifyEmailForm email={profile.email} initialCooldown={cooldown} next={next} />
         )}
       </div>
     </AuthShell>

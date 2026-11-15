@@ -12,7 +12,7 @@
 Konvensi:
 - `PK` = primary key, `FK` = foreign key, `UK` = unique
 - Rupiah `numeric(14,0)` · waktu `timestamptz` · soft delete lewat `deleted_at`
-- Aplikasi Postgres **DML-only**; Prisma Migrate **DDL** (dua user terpisah)
+- Development memakai satu `DATABASE_URL`; production sebaiknya memisahkan user aplikasi **DML-only** dan Prisma Migrate **DDL**
 
 ---
 

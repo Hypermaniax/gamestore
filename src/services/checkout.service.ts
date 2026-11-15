@@ -76,6 +76,8 @@ export const checkoutService = {
     if (!detail.ok) return detail
     if (!detail.data.user)
       return fail('INVALID_SESSION', 'Your session is no longer valid. Please log in again.')
+    if (!detail.data.user.emailVerified)
+      return fail('EMAIL_NOT_VERIFIED', 'Verify your email before checking out.')
 
     return {
       ok: true as const,

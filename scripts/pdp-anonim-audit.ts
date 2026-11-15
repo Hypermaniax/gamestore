@@ -1,6 +1,6 @@
-// Anonymise old audit_reveal IP/UA with the DDL user — usage:
+// Anonymise old audit_reveal IP/UA — usage:
 //   PDP_KONFIRMASI=ANONIMISASI-AUDIT npm run pdp:anonim-audit [-- --dry-run]
-// Requires MIGRATION_DATABASE_URL (never the app user).
+// Uses DATABASE_URL.
 
 import 'dotenv/config'
 import { anonimkanAuditReveal } from '../src/services/pdp.service'
