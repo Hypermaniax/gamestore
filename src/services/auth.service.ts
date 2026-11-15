@@ -420,6 +420,11 @@ export const authService = {
     if (!parsed.ok) return parsed
     const { passwordLama: oldPassword, passwordBaru: newPassword } = parsed.data
 
+    const limited =
+      (await guardRateLimit('reauth', [`user:${session.userId}`])) ??
+      (await guardRateLimit('reauthIp'))
+    if (limited) return limited
+
     const user = await userRepo.findByIdWithRole(session.userId)
     if (!user || !user.active) return fail(AUTH_ERRORS.session.code, AUTH_ERRORS.session)
     const matches = await bcrypt.compare(oldPassword, user.passwordHash)
@@ -447,6 +452,11 @@ export const authService = {
     const parsed = parseInput(requestEmailChangeSchema, input)
     if (!parsed.ok) return parsed
     const { newEmail: newEmail, password } = parsed.data
+
+    const limited =
+      (await guardRateLimit('reauth', [`user:${session.userId}`])) ??
+      (await guardRateLimit('reauthIp'))
+    if (limited) return limited
 
     const user = await userRepo.findByIdWithRole(session.userId)
     if (!user || !user.active) return fail(AUTH_ERRORS.session.code, AUTH_ERRORS.session)

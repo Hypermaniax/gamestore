@@ -8,20 +8,24 @@
 - **Role changes:** self role changes are blocked; role changes bump `tokenVersion` and revoke refresh tokens.
 - **Refresh TOTP enforcement:** ADMIN refresh is rejected while `TOTP_WAJIB_ADMIN=true` and TOTP is not active.
 - **Reset tokens:** password reset/change and email change spend every pending `RESET` token.
+- **Re-auth rate limit:** `changePassword`, `requestEmailChange`, and admin `resetTotp` use the `reauth`/`reauthIp` buckets.
+- **Voucher preview rate limit:** checkout preview is rate-limited per user and per IP.
+- **Restore permission split:** `restore()` requires `account:write` and `credential:write`.
+- **Refresh replay tolerance:** `rotate()` keeps the first `replacedAt` via `COALESCE`, so replays cannot reset the theft-detection deadline.
+- **Photo hardening:** the photo cap is enforced server-side and local photo paths must belong to the target account.
+- **Deactivation policy:** public account queries require an active game and game type; master mutations invalidate the account catalog cache.
+- **Client IP trust:** `X-Forwarded-For`/`X-Real-IP` are ignored unless `TRUST_PROXY_HOPS` declares trusted proxies; resolved values must be valid IPs (`src/lib/client-ip.ts`). See the [addendum](./addendum-2026-11-16.md) for the deferred deployment half.
 
 ## Hardening notes
 
 These are not confirmed vulnerabilities. They are source-visible improvements worth making.
 
-- **Refresh replay tolerance reset:** `refresh()` only revokes when `now - replacedAt > REFRESH_TOLERANCE_MS`, while `rotate()` rewrites `replacedAt` on every call. Replaying the same parent within 30 seconds resets the detection deadline. The only caller is not wired into the current client build, so this is latent.
-- **Credential permission split:** `restore()` uses `account:write` for a credential write; align it with `credential:write`.
-- **Photo namespace and count:** `addPhoto` accepts local paths without comparing the embedded account ID to the submitted account ID, and the empty `FOTO_DOMAIN_WHITELIST` means allow-all. `MAX_PHOTO_COUNT` is client-only; `countActivePhotos` is unused server-side.
+- **Credential permission split:** ~~`restore()` uses `account:write`~~ resolved (see above). Remaining: RBAC CRUD does not exist yet, so no runtime editor can create a mismatched role.
 - **Soft-delete retention:** soft-deleted accounts keep photo rows/files and encrypted credentials with no purge path. The retention job does not remove uploads.
 - **Logout scope:** normal logout revokes only the presented refresh hash; the access JWT remains valid until its 30-minute expiry. `logoutAll` is the full-revocation path.
 - **Audit PII split:** `transaction:read` returns reveal IP/UA while `audit:read` is a separate seeded permission. With only the default ADMIN role this has no affected principal, but custom roles should separate them.
 - **CSP:** `script-src 'unsafe-inline'` remains. The only inline script is the constant theme bootstrap; a hash, nonce, or external script would allow stricter CSP.
-- **Email queue backpressure:** the in-process queue has no cap or drop policy; registration/resend are rate-limited, but a bounded queue with alerting is safer.
-- **Deleted-game policy:** public game/type readers filter `active`, but account reads and `catalog:akun` do not. This is listed as a needs-validation lead because the intended policy is not explicit.
+- **Email delivery:** delivery is direct (no queue); SMTP failures are logged, not retried. Bounded retry/queueing with alerting is a future improvement.
 - **Supply chain:** `shadcn` and `cn` are runtime dependencies despite CLI/utility use; there is no application CI workflow beyond Dependabot. Lockfile integrity is complete.
 
 ## Positive source patterns
@@ -55,5 +59,5 @@ Buyer order ownership and general transaction authorization remain in scope wher
 
 - This is a **partial pass**. The final coverage-critic pass after wave 4 did not complete.
 - A prior prose audit exists at `docs/security-audit.md` for `b2f4429`; no compatible prior ledger existed.
-- Deployment facts still needing owner observation include reverse-proxy `X-Forwarded-For` handling, actual role grants, `/proc` restrictions, and production secret-file contents. `TOTP_WAJIB_ADMIN=true` is now set in the local environment; production should set it in `/etc/gamestore/gamestore.env`.
-- Local validation was limited to one bounded sandbox harness for the confirmed token-purpose issue. The other leads need a disposable database, running app, browser, or host observation.
+- The project is **personal/local-only** as of 2026-11-16: deployment-fact leads (#10 deployment half, #12) are deferred in the [addendum](./addendum-2026-11-16.md) rather than fixed; operator checklist items stay pending until a real deployment is planned.
+- Local validation was limited to one bounded sandbox harness for the confirmed token-purpose issue plus unit-level tests for the safe-next and client-IP fixes. The other leads were closed by source-level fixes, not end-to-end reproduction.

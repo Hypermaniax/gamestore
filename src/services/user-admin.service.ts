@@ -9,6 +9,7 @@ import { emailService } from './email.service'
 import * as userRepo from '../repositories/user-repo'
 import * as totpRepo from '../repositories/totp-repo'
 import { findRoleByCode } from '../repositories/rbac-repo'
+import { guardRateLimit } from '../lib/rate-limit'
 import { realClock } from '../lib/clock'
 import {
   changeUserRoleSchema,
@@ -154,6 +155,12 @@ export const userAdminService = {
 
     const actor = await userRepo.findByIdWithRole(session.userId)
     if (!actor || !actor.active) return INVALID_SESSION
+
+    const limited =
+      (await guardRateLimit('reauth', [`user:${actor.id}`])) ??
+      (await guardRateLimit('reauthIp'))
+    if (limited) return limited
+
     if (!(await bcrypt.compare(password, actor.passwordHash)))
       return fail('PASSWORD_INVALID', 'Admin password does not match.')
 

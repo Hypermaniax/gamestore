@@ -25,22 +25,22 @@ export function create(data: CreateRefresh): Promise<RefreshToken> {
   return prisma.refreshToken.create({ data: pick(data) })
 }
 
-/** Rotation: mark parent as replaced (tolerance clock starts) and create child, atomically. */
+/**
+ * Rotation: mark parent as replaced (tolerance clock starts) and create child, atomically.
+ * `COALESCE` keeps the original `replacedAt` when a parent is replayed inside the
+ * tolerance window, so replays can never push the theft-detection deadline forward.
+ */
 export async function rotate(parentId: bigint, data: CreateRefresh): Promise<RefreshToken> {
   return prisma.$transaction(async (tx) => {
     const child = await tx.refreshToken.create({ data: pick(data) })
-    await tx.refreshToken.update({
-      where: { id: parentId },
-      data: { replacedAt: new Date(), replacedByTokenId: child.id },
-    })
+    await tx.$executeRaw`
+      UPDATE refresh_tokens
+      SET replaced_by_token_id = ${child.id},
+          replaced_at = COALESCE(replaced_at, NOW())
+      WHERE id = ${parentId}
+    `
     return child
   })
-}
-
-/** Tolerant reuse: re-point an already-replaced parent at a fresh sibling. */
-export async function fork(parentId: bigint, data: CreateRefresh): Promise<RefreshToken> {
-  // Same shape as rotate — the parent simply gets a new child.
-  return rotate(parentId, data)
 }
 
 export function findByHash(hash: string): Promise<RefreshToken | null> {

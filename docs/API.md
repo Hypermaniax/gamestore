@@ -47,8 +47,8 @@ Legenda fase: 🟢 MVP · 🔵 Fase 2 · 🔴 wajib sebelum go-live. Ubah bentuk
 | POST | `/auth/verify-email` | Verifikasi email dengan `{ email?, code }`: kode 6 digit, berlaku 15 menit, maksimal 5 percobaan, sekali pakai; `email` opsional bila sudah login. Membuka hak checkout. | ✅ 🟢 |
 | POST | `/auth/resend-verification` | Kirim ulang kode verifikasi; rate-limited, jawaban generik | ✅ 🟢 |
 | POST | `/auth/forgot-password`, `/auth/reset-password` | Reset sekali pakai; sesi lama mati; token RESET lain dihabiskan | ✅ 🟢 |
-| PUT | `/auth/ganti-password` | Wajib password lama; sesi lain dicabut; token RESET lain dihabiskan | ✏️ 🟢 |
-| PUT | `/auth/change-email` | **Wajib password saat ini**; email tujuan disimpan di `email_tokens.new_email`; token dikirim ke email lama + baru; dibandingkan **lower(email)** — unik tanpa peduli kapital | ➕ 🟢 |
+| PUT | `/auth/ganti-password` | Wajib password lama; sesi lain dicabut; token RESET lain dihabiskan; **rate-limited** (per user + IP) | ✏️ 🟢 |
+| PUT | `/auth/change-email` | **Wajib password saat ini**; email tujuan disimpan di `email_tokens.new_email`; token dikirim ke email lama + baru; dibandingkan **lower(email)** — unik tanpa peduli kapital; **rate-limited** (per user + IP) | ➕ 🟢 |
 | POST | `/auth/change-email/confirm` | Konfirmasi **kedua** token (lama + baru) → email berganti; sesi lain dicabut; token RESET lain dihabiskan; pemberitahuan ke alamat lama | ➕ 🟢 |
 | GET | `/auth/me`, `/auth/menu` | Profil (+ status verifikasi email); menu sidebar dari database | ✅ 🟢 |
 | DELETE | `/auth/account` | Hapus/anonimkan data pribadi; transaksi tetap ada tanpa identitas (hak UU PDP) | ➕ 🔵 |
@@ -73,7 +73,7 @@ Data master (`/game-types`, `/game`, `/themes/active`, `/pages/*`) dibaca **serv
 
 | Method | Endpoint | Kegunaan | Fase |
 |---|---|---|---|
-| POST | `/checkout/pratinjau` | Hitung rincian: harga awal − promo − voucher = total; lolos minimum nominal? **Tidak mengonsumsi kuota** — sumber kebenaran harga mesti di server; `total` di respons dikirim balik sebagai `totalPratinjau` saat checkout | ✏️ 🟢 |
+| POST | `/checkout/pratinjau` | Hitung rincian: harga awal − promo − voucher = total; lolos minimum nominal? **Tidak mengonsumsi kuota** — sumber kebenaran harga mesti di server; `total` di respons dikirim balik sebagai `totalPratinjau` saat checkout; **rate-limited** (per user + IP) | ✏️ 🟢 |
 | POST | `/transactions` | Checkout 3 fase. Argumen: akun, kodeVoucher?, metode, bank? (khusus VA), syaratVersi, **totalPratinjau**, **`kunciIdempoten`**. Sukses / kode `ACCOUNT_UNAVAILABLE` atau `REQUEST_IN_PROGRESS` (key masih berjalan) atau kontras-isi key atau **`PRICE_CHANGED`** (total server ≠ totalPratinjau; klien tampilkan harga baru) / `CHECKOUT_CLOSED` | ✏️ 🟢 |
 | GET | `/transactions?status=`, `/transactions/{code}` | Riwayat dan detail (+ QR/VA + sisa waktu) | ✅ 🟢 |
 | GET | `/transactions/{code}/status` | **Polling ringan** halaman bayar: hanya status + sisa detik — bukan detail penuh | ➕ 🟢 |
@@ -105,7 +105,7 @@ Data master (`/game-types`, `/game`, `/themes/active`, `/pages/*`) dibaca **serv
 | GET/PUT/DELETE | `/panel/accounts/{id}` | Detail/edit/soft delete (**DELETE hanya saat `DELISTED`**; `SOLD` tak boleh dihapus, `AVAILABLE`/`RESERVED` harus di-delist dulu) — **PUT TIDAK mengubah status & kredensial** (status hanya via method domain) | ✏️ 🟢 |
 | PUT | `/panel/accounts/{id}/credentials` | Isi/ganti kredensial — **tulis-saja, TIDAK ADA GET**; **ditolak saat akun `RESERVED`/`SOLD`** (kredensial jangan diubah saat transaksi berjalan) | ➕ 🟢 |
 | POST | `/panel/accounts/{id}/delist`, `/panel/accounts/{id}/relist` | Transisi status via endpoint aksi (bukan PUT status); **`relist()` wajib menolak bila kredensial belum terisi** | ➕ 🟢 |
-| POST | `/panel/accounts/{id}/restore` | `SOLD → AVAILABLE` setelah refund — admin-only, tercatat audit, **wajib kredensial diganti dulu** (yang lama sudah pernah direveal pembeli) | ➕ 🔵 |
+| POST | `/panel/accounts/{id}/restore` | `SOLD → AVAILABLE` setelah refund — admin-only (wajib `account:write` **+** `credential:write`), tercatat audit, **wajib kredensial diganti dulu** (yang lama sudah pernah direveal pembeli) | ➕ 🔵 |
 | POST/DELETE | `/panel/accounts/{id}/photos` | Kelola galeri foto — **DELETE = soft** (`deleted_at`, baris tetap tersimpan) | ✏️ 🟢 |
 | PUT | `/panel/accounts/{id}/photos/order` | Urutan foto | ✏️ 🟢 |
 | CRUD | `/panel/games`, `/panel/games` | Master; perubahan `attribute_schema` **tambahan saja** — field wajib baru tak berlaku mundur; DELETE = `active=false` | ✅ 🟢 |
@@ -197,7 +197,7 @@ Skema jadi: **30 tabel — MVP 28, Fase 2 +2** (`komplain`, `wishlist`).
 - **Saklar `checkout_aktif`**: bila mati, hanya aksi checkout yang ditolak (`CHECKOUT_CLOSED`); katalog, pembayaran berjalan, dan reveal tetap normal
 - `AutoKonfirmasiJob` juga mengisi `warranty_start = paid_at + GARANSI_MAKS_TANPA_REVEAL_HARI` untuk transaksi yang tak pernah reveal
 - **Telat-bayar & voucher**: reserve-ulang → `PAID` mengonsumsi ulang voucher (usage → `TERPAKAI`, `used`++); gagal (kuota habis / voucher terpakai transaksi aktif lain) → `NEEDS_REFUND`
-- **Aturan hapus**: `DELETE /panel/accounts/{id}` hanya saat `DELISTED`; DELETE pada master (game_types, games, vouchers, promotions, themes, users) = `active=false`; katalog publik, `/`, `sitemap.xml` memfilter `deleted_at IS NULL`
+- **Aturan hapus**: `DELETE /panel/accounts/{id}` hanya saat `DELISTED`; DELETE pada master (game_types, games, vouchers, promotions, themes, users) = `active=false`; katalog publik, `/`, `sitemap.xml` memfilter `deleted_at IS NULL` **dan hanya akun dengan game/type yang masih `active`** — nonaktif master juga menginvalidasi cache katalog akun
 
 ---
 

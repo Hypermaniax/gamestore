@@ -61,14 +61,17 @@ export type PublicFilter = {
 }
 
 function publicWhere(filter: PublicFilter): Prisma.GameAccountWhereInput {
-  const game: Prisma.GameWhereInput = {}
-  if (filter.typeCode) game.type = { code: filter.typeCode }
-  if (filter.gameCode) game.code = filter.gameCode
+  // Deactivated games/types hide their accounts from every public surface.
+  const game: Prisma.GameWhereInput = {
+    active: true,
+    type: { active: true, ...(filter.typeCode ? { code: filter.typeCode } : {}) },
+    ...(filter.gameCode ? { code: filter.gameCode } : {}),
+  }
 
   return {
     status: 'AVAILABLE',
     deletedAt: null,
-    ...(Object.keys(game).length > 0 ? { game } : {}),
+    game,
     ...(filter.minPrice !== undefined || filter.maxPrice !== undefined
       ? {
           price: {
@@ -103,7 +106,12 @@ export function countPublic(filter: Omit<PublicFilter, 'sort' | 'skip' | 'take'>
 
 export function findBySlugPublic(slug: string) {
   return prisma.gameAccount.findFirst({
-    where: { slug, status: 'AVAILABLE', deletedAt: null },
+    where: {
+      slug,
+      status: 'AVAILABLE',
+      deletedAt: null,
+      game: { active: true, type: { active: true } },
+    },
     select: publicSelect,
   })
 }
@@ -111,7 +119,12 @@ export function findBySlugPublic(slug: string) {
 /** Checkout needs the internal id and game id, never exposed by the public serializer. */
 export function findForCheckoutBySlug(slug: string) {
   return prisma.gameAccount.findFirst({
-    where: { slug, status: 'AVAILABLE', deletedAt: null },
+    where: {
+      slug,
+      status: 'AVAILABLE',
+      deletedAt: null,
+      game: { active: true, type: { active: true } },
+    },
     select: {
       id: true,
       slug: true,

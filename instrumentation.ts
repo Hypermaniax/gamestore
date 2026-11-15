@@ -29,6 +29,15 @@ export async function register() {
       throw new Error('[startup] TOTP_WAJIB_ADMIN wajib true di produksi')
     if (!process.env.APP_BASE_URL?.startsWith('https://'))
       throw new Error('[startup] APP_BASE_URL produksi wajib https://')
+
+    const hops = process.env.TRUST_PROXY_HOPS
+    if (hops !== undefined && hops !== '' && !/^(10|\d)$/.test(hops))
+      throw new Error('[startup] TRUST_PROXY_HOPS wajib integer 0–10')
+    if (hops === undefined || hops === '')
+      console.warn(
+        '[startup] TRUST_PROXY_HOPS tidak diisi — X-Forwarded-For diabaikan (fail-closed). ' +
+          'Set 1 bila di belakang satu reverse proxy.',
+      )
   }
 
   if (process.env.NEXT_RUNTIME === 'nodejs' && !isBuild) {

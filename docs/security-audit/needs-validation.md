@@ -114,6 +114,8 @@ These are source-grounded leads, not confirmed vulnerabilities. They have no ass
 
 ## 6. Re-authentication lacks rate limiting and exposes a password oracle
 
+**Status:** Fixed in working tree 2026-11-16: `changePassword`, `requestEmailChange`, and admin `resetTotp` now run the `reauth`/`reauthIp` buckets before the password comparison, so repeated wrong passwords hit the same `TOO_MANY_REQUESTS` contract as login.
+
 **Fingerprint:** `auth.service.password-reauth-no-rate-limit-oracle`
 
 **Trace:** `src/controllers/auth.controller.ts:71` → `src/services/auth.service.ts:428` → `src/services/auth.service.ts:437` → `src/services/auth.service.ts:440`
@@ -131,6 +133,8 @@ These are source-grounded leads, not confirmed vulnerabilities. They have no ass
 
 ## 7. Voucher preview lacks rate limiting
 
+**Status:** Fixed in working tree 2026-11-16: `preview` runs the `voucherPreview`/`voucherPreviewIp` buckets after session verification and before any account/voucher lookup.
+
 **Fingerprint:** `src/services/voucher.service.ts:preview:missing-rate-limit`
 
 **Trace:** `src/controllers/discount.controller.ts:55` → `src/services/voucher.service.ts:229` → `src/services/voucher.service.ts:248` → `src/services/voucher.service.ts:198` → `src/services/voucher.service.ts:200`
@@ -146,6 +150,8 @@ These are source-grounded leads, not confirmed vulnerabilities. They have no ass
 - **Deployment:** submit a series of invalid and known used/exhausted codes from a verified staging buyer.
 
 ## 8. Account restore writes credentials with only `account:write`
+
+**Status:** Fixed in working tree 2026-11-16: `restore` now requires both `account:write` and `credential:write`, matching the documented permission matrix.
 
 **Fingerprint:** `account.service.restore.credential-write-bypass`
 
@@ -164,6 +170,8 @@ These are source-grounded leads, not confirmed vulnerabilities. They have no ass
 
 ## 9. Deactivated game/type leaves public account copies
 
+**Status:** Fixed in working tree 2026-11-16 (policy decided by the owner): public account queries now require `game.active` and `game.type.active`, and game/type mutations invalidate the `catalog:akun` tag, so deactivated masters hide their accounts from list/detail/search/checkout/sitemap immediately.
+
 **Fingerprint:** `catalog.deactivation-public-account-copy`
 
 **Trace:** `components/storefront/catalog.tsx:122` → `src/lib/cache/catalog.ts:32` → `src/repositories/account-repo.ts:90` → `src/repositories/account-repo.ts:69`
@@ -180,6 +188,8 @@ These are source-grounded leads, not confirmed vulnerabilities. They have no ass
 - **Deployment:** confirm the deactivation policy and observe a staging deactivation with test accounts.
 
 ## 10. Client IP trusts unvalidated `X-Forwarded-For`
+
+**Status:** Mitigated in working tree 2026-11-16 at the code level: `X-Forwarded-For`/`X-Real-IP` are ignored unless `TRUST_PROXY_HOPS` declares a hop count, and the selected value must be a valid IP (`src/lib/client-ip.ts`). The deployment half (proxy configuration, direct-reachability) is deferred — the project is local-only for now.
 
 **Fingerprint:** `rate-limit.client-ip.forwarded-header-trust`
 
@@ -198,6 +208,8 @@ These are source-grounded leads, not confirmed vulnerabilities. They have no ass
 
 ## 11. Verify-email `next` open redirect
 
+**Status:** Fixed in working tree 2026-11-16: login and verify-email share `src/lib/safe-next.ts`, which additionally rejects backslashes, C0/DEL control characters, and any value whose resolved origin is not the application.
+
 **Fingerprint:** `verify-email:safeNext:open-redirect`
 
 **Trace:** `app/(public)/(auth)/verify-email/page.tsx:20` → `app/(public)/(auth)/verify-email/page.tsx:11` → `components/verify-email-form.tsx:91` → `node_modules/next/dist/client/components/sequential-router-queue.js:85`
@@ -213,6 +225,8 @@ These are source-grounded leads, not confirmed vulnerabilities. They have no ass
 - **Deployment:** use a dummy verified account and an owner-controlled external test origin.
 
 ## 12. DB credential in backup/restore process arguments
+
+**Status:** Deferred 2026-11-16 — the project is personal/local-only with no `pg_dump` schedule or server deployment, so the scripts are unused today. Revisit with a `PGPASSFILE` helper plus `ProtectProc` hardening before any real deployment.
 
 **Fingerprint:** `deploy-db-url-in-process-argv`
 

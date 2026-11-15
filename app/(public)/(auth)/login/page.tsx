@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
 import { loginFormAction, type LoginFormState } from '@/src/controllers/auth.controller'
+import { safeNextPath } from '@/src/lib/safe-next'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { TotpLoginForm } from '@/components/totp-login-form'
 
@@ -20,15 +21,9 @@ const ERROR_COPY: Record<string, string> = {
 
 const initialState: LoginFormState = { error: null }
 
-function safeNext(value: string | null): string | null {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return null
-  if (value.includes('\\') || /[\u0000-\u001f\u007f]/.test(value)) return null
-  return value
-}
-
 function nextFromLocation(): string | null {
   if (typeof window === 'undefined') return null
-  return safeNext(new URLSearchParams(window.location.search).get('next'))
+  return safeNextPath(new URLSearchParams(window.location.search).get('next'))
 }
 
 export default function LoginForm() {

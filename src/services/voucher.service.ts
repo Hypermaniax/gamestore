@@ -23,6 +23,7 @@ import {
 } from '../validation/diskon'
 import { parseInput, type UnionError } from '../validation/parse'
 import { hitungDiskon, toRupiah, type DiskonJenis } from '../lib/diskon'
+import { guardRateLimit } from '../lib/rate-limit'
 import { realClock } from '../lib/clock'
 import { z } from 'zod'
 import type { SessionClaims } from '../lib/session'
@@ -235,6 +236,11 @@ export const voucherService = {
 
     const parsed = parseInput(voucherPreviewSchema, input)
     if (!parsed.ok) return parsed
+
+    const limited =
+      (await guardRateLimit('voucherPreview', [`user:${session.userId}`])) ??
+      (await guardRateLimit('voucherPreviewIp'))
+    if (limited) return limited
 
     const account = await accountRepo.findById(parsed.data.accountId)
     if (!account || account.deletedAt || account.status !== 'AVAILABLE')

@@ -4,6 +4,7 @@
 
 import { RateLimiterMemory, type RateLimiterRes } from 'rate-limiter-flexible'
 import { headers } from 'next/headers'
+import { resolveClientIp, trustedProxyHops } from './client-ip'
 import type { UnionError } from '../validation/parse'
 
 type Bucket = {
@@ -15,6 +16,10 @@ type Bucket = {
 export const RATE_LIMITS = {
   login: { points: 10, durationSeconds: 300, perIp: true },
   loginIdentity: { points: 5, durationSeconds: 300, perIp: false },
+  reauth: { points: 10, durationSeconds: 900, perIp: false },
+  reauthIp: { points: 50, durationSeconds: 900, perIp: true },
+  voucherPreview: { points: 20, durationSeconds: 900, perIp: false },
+  voucherPreviewIp: { points: 60, durationSeconds: 900, perIp: true },
   register: { points: 5, durationSeconds: 3600, perIp: true },
   email: { points: 5, durationSeconds: 900, perIp: false },
   emailIp: { points: 20, durationSeconds: 3600, perIp: true },
@@ -48,13 +53,15 @@ function limiterFor(name: BucketName): RateLimiterMemory {
   return limiter
 }
 
-/** Best-effort client IP — Server Actions run in a request context, smoke scripts do not. */
+/** Best-effort client IP — Server Actions run in a request context, smoke scripts do not.
+ *  X-Forwarded-For is ignored unless TRUST_PROXY_HOPS declares trusted proxies. */
 export async function clientIp(): Promise<string> {
   try {
     const h = await headers()
-    const forwarded = h.get('x-forwarded-for')
-    if (forwarded) return forwarded.split(',')[0]?.trim() || 'unknown'
-    return h.get('x-real-ip') ?? 'unknown'
+    return resolveClientIp(
+      { forwardedFor: h.get('x-forwarded-for'), realIp: h.get('x-real-ip') },
+      trustedProxyHops(),
+    )
   } catch {
     return 'local'
   }

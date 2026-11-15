@@ -70,10 +70,10 @@
 - [x] Register (BCrypt ≥ 8, role PEMBELI) + verifikasi email (kode OTP 6 digit, HMAC hash, kedaluwarsa, kirim-ulang)
 - [x] Ganti email dua-tahap (`new_email` + konfirmasi); lupa/reset/ganti password; token RESET dihabiskan saat reset/ganti password atau ganti email
 - [x] Login: JWT 15–30 menit + `token_version` + cek `active` tiap aksi/access-request
-- [x] Refresh: cookie httpOnly + Secure + SameSite=Strict, **rotasi + toleransi 10–30 dtk**; logout satu-sesi & logout-semua; admin wajib TOTP tidak bisa refresh bila TOTP belum aktif
+- [x] Refresh: cookie httpOnly + Secure + SameSite=Strict, **rotasi + toleransi 10–30 dtk** (`replaced_at` pertama dipertahankan — replay tidak mereset deteksi); logout satu-sesi & logout-semua; admin wajib TOTP tidak bisa refresh bila TOTP belum aktif
 - [x] RBAC resolve dari database (menu + permission, hormati `revoked_at`); guard anti-kunci diri; CRUD RBAC tetap 🔵
 - [x] TOTP di balik flag `TOTP_WAJIB_ADMIN`: setup/aktifkan (recovery tampil sekali), login/totp (anti-replay `totp_last_step`, terima recovery code), `recovery-baru` (password + TOTP, kode lama `revoked_at`), `reset-totp` (permission + re-auth + email target), alur `perlu_setup_totp` (token 15 menit terbatas di cookie HttpOnly, bukan URL), kunci `totp_failures`/`totp_locked_until` di DB; prosedur darurat CLI 🔴 (uji di fase 10)
-- [x] Rate limit rate-limiter-flexible (in-memory) per bucket: login, register, email, token, refresh, totp (bucket checkout/reveal/polling/webhook dipasang di fase terkait)
+- [x] Rate limit rate-limiter-flexible (in-memory) per bucket: login, register, email, token, refresh, totp, **re-auth** (ganti password/email, reset TOTP), **voucher preview** (bucket checkout/reveal/polling/webhook dipasang di fase terkait); IP klien **fail-closed** — `X-Forwarded-For` diabaikan tanpa `TRUST_PROXY_HOPS` (`src/lib/client-ip.ts`)
 - [x] Email admin infra (event operasional → inbox admin)
 - [x] `admin_audit_logs` (INSERT/SELECT) + aksi pembaca audit-log
 - [x] Aksi users: list, ubah role (mencabut sesi target), aktif/nonaktif, `force-logout`, reset TOTP (UI panel menyusul Fase 8)
@@ -85,11 +85,11 @@
 ## Fase 3 — Katalog 🔄
 
 - [x] Master jenis-game & game (CRUD admin; "DELETE" = flip `active`; skema atribut dinamis per game — hanya boleh tumbuh)
-- [x] Akun: mulai **draf → relist wajib kredensial**; state machine lengkap (`AVAILABLE/RESERVED/SOLD/DELISTED`); `release()` terpisah dari `relist()`; `restore()` wajib ganti kredensial 🔵
+- [x] Akun: mulai **draf → relist wajib kredensial**; state machine lengkap (`AVAILABLE/RESERVED/SOLD/DELISTED`); `release()` terpisah dari `relist()`; `restore()` wajib ganti kredensial 🔵 dan izin `account:write` **+** `credential:write`
 - [x] `DELETE /panel/accounts` **hanya saat `DELISTED`** (soft delete `deleted_at`); `RESERVED` tak bisa di-edit/delist
 - [x] Kredensial tulis-saja: AES-GCM (IV 12 byte acak, AAD = `akun:<id>`, keyring `key_version`); tanpa GET; ditolak saat `RESERVED/SOLD`; flag `credentials_present`
 - [x] Foto: URL + urutan; DELETE = soft (`account_photos.deleted_at`) — upload storage menyusul Fase 7
-- [x] Slug unik + browse publik: hanya `AVAILABLE` dan `deleted_at IS NULL`; filter jenis/game/harga/atribut, urutan whitelist, `size` maks 100, `?q=` full-text
+- [x] Slug unik + browse publik: hanya `AVAILABLE` dan `deleted_at IS NULL`, **dengan game/type yang masih `active`** (nonaktif master menyembunyikan akun + menginvalidasi cache); filter jenis/game/harga/atribut, urutan whitelist, `size` maks 100, `?q=` full-text
 - [x] GIN `attributes` & `search_vector`; `use cache` + `cacheTag`/`updateTag` untuk data master
 
 **Selesai bila:** unit test state machine hijau; DB berisi ciphertext (bukan plaintext); relist tanpa kredensial ditolak.
@@ -101,7 +101,7 @@
 - [x] Strategy promo: persen/nominal + `max_discount`, cakupan AKUN > GAME > SEMUA (paling spesifik menang; **seri → potongan rupiah terbesar → `id` terbesar**), rentang `starts_at`–`ends_at`
 - [x] Voucher: kode, `min_purchase`, kuota, `valid_until`, 1× per user (`voucher_usages` baris tak pernah dihapus)
 - [x] Konsumsi kuota **atomik**: `UPDATE ... SET used = used + 1 WHERE id = ? AND used < quota` (0 baris → `VOUCHER_EXHAUSTED`)
-- [x] Pratinjau total: promo dulu, voucher di atas harga setelah promo; persen **floor** ke rupiah; total akhir > 0
+- [x] Pratinjau total: promo dulu, voucher di atas harga setelah promo; persen **floor** ke rupiah; total akhir > 0; **rate-limited**
 - [x] Pelepasan saat gagal/expire: usage → `DIPULIHKAN` + `used` turun (flip status, bukan hapus)
 - [x] CRUD `/panel/vouchers` & `/panel/promotions`; publik: `/promo/aktif`, `/beranda` (cache promo aktif)
 

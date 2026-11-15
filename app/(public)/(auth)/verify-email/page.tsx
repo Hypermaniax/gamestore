@@ -5,12 +5,7 @@ import { ShieldCheck } from 'lucide-react'
 import { AuthShell } from '@/components/auth-shell'
 import { VerifyEmailForm } from '@/components/verify-email-form'
 import { authService } from '@/src/services/auth.service'
-
-function safeNext(value: string | string[] | undefined): string | null {
-  const next = Array.isArray(value) ? value[0] : value
-  if (!next || !next.startsWith('/') || next.startsWith('//')) return null
-  return next
-}
+import { safeNextPath } from '@/src/lib/safe-next'
 
 export default async function VerifyEmailPage({
   searchParams,
@@ -21,7 +16,7 @@ export default async function VerifyEmailPage({
     searchParams,
     authService.profile(),
   ])
-  const next = safeNext(rawNext)
+  const next = safeNextPath(rawNext)
 
   if (!profile.ok) {
     return (

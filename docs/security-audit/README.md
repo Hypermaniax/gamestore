@@ -14,6 +14,7 @@
 - [Confirmed findings](./confirmed.md)
 - [Needs validation](./needs-validation.md)
 - [Hardening, positive controls, and coverage](./hardening-and-coverage.md)
+- [Addendum 2026-11-16 — fix verification & deferred deployment items](./addendum-2026-11-16.md)
 
 ## Headline
 

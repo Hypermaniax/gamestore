@@ -7,7 +7,7 @@ import { auditService } from './audit.service'
 import * as accountRepo from '../repositories/account-repo'
 import * as gameRepo from '../repositories/game-repo'
 import { encryptString } from '../lib/crypto'
-import { parseLocalPhotoPath } from '../lib/photo'
+import { MAX_PHOTO_COUNT, parseLocalPhotoPath } from '../lib/photo'
 import { deleteAccountPhoto, saveAccountPhoto } from '../lib/account-photo'
 import { realClock } from '../lib/clock'
 import { withSuffix } from '../lib/slug'
@@ -108,6 +108,14 @@ function isPhotoDomainAllowed(url: string): boolean {
   } catch {
     return false
   }
+}
+
+/** Server-side photo cap — the client-side limit is advisory only. */
+async function photoCapError(accountId: bigint): Promise<UnionError | null> {
+  const active = await accountRepo.countActivePhotos(accountId)
+  if (active >= MAX_PHOTO_COUNT)
+    return fail('PHOTO_LIMIT', `An account can have at most ${MAX_PHOTO_COUNT} photos.`)
+  return null
 }
 
 const serializePublic = (row: {
@@ -387,6 +395,8 @@ export const accountService = {
   async restore(input: AccountRestoreInput) {
     const session = await requirePermission('account:write')
     if (isError(session)) return session
+    const credential = await requirePermission('credential:write')
+    if (isError(credential)) return credential
     const parsed = parseInput(accountRestoreSchema, input)
     if (!parsed.ok) return parsed
 
@@ -438,6 +448,9 @@ export const accountService = {
     const account = await accountRepo.findById(parsed.data.id)
     if (!account || account.deletedAt) return fail('ACCOUNT_NOT_FOUND', 'Account not found.')
 
+    const cap = await photoCapError(parsed.data.id)
+    if (cap) return cap
+
     let url: string
     try {
       url = await saveAccountPhoto(input.file, input.accountId)
@@ -471,6 +484,13 @@ export const accountService = {
 
     const account = await accountRepo.findById(parsed.data.accountId)
     if (!account || account.deletedAt) return fail('ACCOUNT_NOT_FOUND', 'Account not found.')
+
+    const local = parseLocalPhotoPath(parsed.data.url)
+    if (local && local.accountId !== parsed.data.accountId.toString())
+      return fail('PHOTO_INVALID', 'The photo path does not belong to this account.')
+
+    const cap = await photoCapError(parsed.data.accountId)
+    if (cap) return cap
 
     const order = parsed.data.order ?? (await accountRepo.nextPhotoOrder(parsed.data.accountId))
     const photo = await accountRepo.addPhoto(parsed.data.accountId, parsed.data.url, order)
