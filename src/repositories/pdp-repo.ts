@@ -35,6 +35,7 @@ export function hapusDataPribadi(input: {
       data: { revokedAt: input.at },
     }),
     prisma.emailToken.updateMany({ where: { userId: input.userId }, data: { newEmail: null } }),
+    prisma.emailOtp.deleteMany({ where: { userId: input.userId } }),
   ])
 }
 

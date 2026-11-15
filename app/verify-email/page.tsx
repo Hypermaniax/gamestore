@@ -1,37 +1,73 @@
 export const instant = false
 
 import Link from 'next/link'
+import { ShieldCheck } from 'lucide-react'
 import { AuthShell } from '@/components/auth-shell'
+import { VerifyEmailForm } from '@/components/verify-email-form'
 import { authService } from '@/src/services/auth.service'
 
-export default async function VerifikasiEmailPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ token?: string | string[] }>
-}) {
-  const { token } = await searchParams
-  const hasil = typeof token === 'string' ? await authService.verifyEmail(token) : null
+export default async function VerifyEmailPage() {
+  const profile = await authService.profile()
+
+  if (!profile.ok) {
+    return (
+      <AuthShell>
+        <span className="grid size-11 place-items-center rounded-2xl bg-brand/15 text-brand-deep">
+          <ShieldCheck className="size-5" aria-hidden="true" />
+        </span>
+        <h1 className="mt-4 font-display text-3xl font-bold tracking-tight">Verify your email</h1>
+        <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
+          Sign in to verify the email on your account. Your verification code is tied to your
+          session, so you will not need to enter your email again.
+        </p>
+        <Link
+          href="/login"
+          className="mt-7 inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink transition hover:brightness-105 active:scale-[.99]"
+        >
+          Sign in
+        </Link>
+      </AuthShell>
+    )
+  }
+
+  const verified = profile.emailVerified
+  const cooldown = verified ? 0 : await authService.verificationCooldown()
 
   return (
     <AuthShell>
-      <p className="text-xs font-bold uppercase tracking-[.18em] text-brand-deep">Verification</p>
-      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight">
-        {hasil?.ok ? 'Email verified' : 'Verify email'}
+      {verified && (
+        <span className="grid size-11 place-items-center rounded-2xl bg-brand/15 text-brand-deep">
+          <ShieldCheck className="size-5" aria-hidden="true" />
+        </span>
+      )}
+      <h1 className={`font-display text-3xl font-bold tracking-tight ${verified ? 'mt-4' : ''}`}>
+        {verified ? 'Email verified' : 'Verify your email'}
       </h1>
-
-      <p className="mt-4 text-sm text-muted-foreground">
-        {hasil?.ok
-          ? 'Thank you. Your email is verified and you can now check out.'
-          : (hasil?.message ?? 'The verification link is incomplete. Open the link directly from the email.')}
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        {verified
+          ? 'Your email is already verified. You can continue to checkout.'
+          : `Enter the 6-digit code sent to ${profile.email} to verify your account.`}
       </p>
 
-      <div className="mt-6 flex flex-wrap gap-4 text-sm font-bold">
-        <Link href="/login" className="text-brand-deep underline-offset-4 hover:underline">
-          Sign in
-        </Link>
-        <Link href="/" className="text-foreground underline-offset-4 hover:underline">
-          Back to home
-        </Link>
+      <div className="mt-7">
+        {verified ? (
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/account"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink transition hover:brightness-105 active:scale-[.99]"
+            >
+              Back to account
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-border px-5 text-sm font-bold text-foreground transition hover:bg-muted"
+            >
+              Back to home
+            </Link>
+          </div>
+        ) : (
+          <VerifyEmailForm email={profile.email} initialCooldown={cooldown} />
+        )}
       </div>
     </AuthShell>
   )

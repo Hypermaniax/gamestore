@@ -20,10 +20,14 @@ import {
 import * as userRepo from '../repositories/user-repo'
 import * as refreshTokenRepo from '../repositories/refresh-token-repo'
 import * as emailTokenRepo from '../repositories/email-token-repo'
+import * as emailOtpRepo from '../repositories/email-otp-repo'
 import * as totpRepo from '../repositories/totp-repo'
 import { findRoleByCode } from '../repositories/rbac-repo'
 import { decryptString, encryptString } from '../lib/crypto'
+import { generateOtpCode, hashOtpCode, matchesOtpCode } from '../lib/email-otp'
+import { enqueueEmail } from '../lib/email-queue'
 import { guardRateLimit } from '../lib/rate-limit'
+import { loadJwtSecret } from '../lib/secret'
 import { hashRecoveryCode, newRecoveryCodes, newTotpSecret, totpUri, verifyTotp } from '../lib/totp'
 import type { UserWithRole } from '../repositories/user-repo'
 import type { User } from '../../generated/client'
@@ -40,7 +44,7 @@ import {
   totpLoginSchema,
   totpRecoveryRegenerateSchema,
   totpSetupSchema,
-  verificationTokenSchema,
+  verifyEmailSchema,
   type ChangePasswordInput,
   type ConfirmEmailChangeInput,
   type LoginInput,
@@ -52,6 +56,7 @@ import {
   type TotpLoginInput,
   type TotpRecoveryRegenerateInput,
   type TotpSetupInput,
+  type VerifyEmailInput,
 } from '../validation/auth'
 import { emailSchema } from '../validation/common'
 import { parseInput, type UnionError } from '../validation/parse'
@@ -59,7 +64,10 @@ import { parseInput, type UnionError } from '../validation/parse'
 export const BCRYPT_ROUNDS = 12
 export const REFRESH_TOLERANCE_MS = 30_000
 
-const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000
+const EMAIL_VERIFICATION_TTL_MS = 15 * 60 * 1000
+export const EMAIL_OTP_RESEND_SECONDS = 60
+const EMAIL_OTP_RESEND_DELAY_MS = EMAIL_OTP_RESEND_SECONDS * 1000
+const EMAIL_OTP_MAX_ATTEMPTS = 5
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000
 const EMAIL_CHANGE_TTL_MS = 24 * 60 * 60 * 1000
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -139,26 +147,46 @@ function isUnionError(value: UserWithRole | UnionError): value is UnionError {
   return 'code' in value
 }
 
-/** Internal: mint a verification token row and email the link. */
-async function sendVerification(user: User): Promise<void> {
-  const token = randomToken()
-  await emailTokenRepo.create({
+/** Internal: create a one-time verification code and email it. */
+async function sendVerification(user: User, defer = false): Promise<void> {
+  const now = realClock.now()
+  const code = generateOtpCode()
+  await emailOtpRepo.replaceActive({
     userId: user.id,
-    type: 'VERIFIKASI',
-    tokenHash: sha256(token),
-    validUntil: new Date(realClock.now().getTime() + VERIFY_TOKEN_TTL_MS),
+    purpose: emailOtpRepo.EMAIL_OTP_PURPOSE,
+    codeHash: hashOtpCode(user.id, code, loadJwtSecret()),
+    expiresAt: new Date(now.getTime() + EMAIL_VERIFICATION_TTL_MS),
+    at: now,
   })
-  await emailService.sendEmail(
-    user.email,
-    'Store email verification',
-    `Verify your email: ${emailService.verificationLink(token)}\nThe link is valid for 24 hours.`,
-  )
+
+  const subject = 'Your NEXAPLAY verification code'
+  const text = `Your NEXAPLAY verification code is ${code}.\nIt expires in 15 minutes. If you did not create an account, ignore this email.`
+  const html = `<div style="background:#0b0b0f;padding:32px;font-family:Arial,Helvetica,sans-serif;color:#f5f5f7">
+      <div style="max-width:520px;margin:0 auto;background:#14141b;border:1px solid #2a2a35;border-radius:18px;padding:32px">
+        <p style="margin:0 0 8px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#b8a1ff">NEXAPLAY</p>
+        <h1 style="margin:0 0 12px;font-size:24px;line-height:1.25">Verify your email</h1>
+        <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#b9b9c6">Enter this 6-digit code to finish creating your account.</p>
+        <div style="border-radius:14px;background:#0b0b0f;border:1px solid #343445;padding:20px;text-align:center">
+          <span style="font-family:'Courier New',monospace;font-size:38px;font-weight:700;letter-spacing:10px;color:#ffffff">${code}</span>
+        </div>
+        <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#b9b9c6">This code expires in 15 minutes. If you did not create an account, you can ignore this email.</p>
+      </div>
+    </div>`
+
+  if (defer) {
+    enqueueEmail({ to: user.email, subject, text, html })
+    return
+  }
+  await emailService.sendEmail(user.email, subject, text, html)
 }
 
 export const authService = {
   /* -------------------------------------------------------------- register */
 
-  async register(input: RegisterInput): Promise<Result | UnionError> {
+  async register(
+    input: RegisterInput,
+    options: { autoLogin?: boolean; deferEmail?: boolean } = {},
+  ): Promise<Result | UnionError> {
     const parsed = parseInput(registerSchema, input)
     if (!parsed.ok) return parsed
     const { username, email, password } = parsed.data
@@ -183,32 +211,100 @@ export const authService = {
       if (isP2002) return fail('EMAIL_ALREADY_USED', AUTH_ERRORS.emailInUse)
       throw err
     }
-    await sendVerification(user)
+    await sendVerification(user, options.deferEmail)
+    if (options.autoLogin) {
+      const authenticated = await userRepo.findByIdWithRole(user.id)
+      if (!authenticated) throw new Error('Registered user not found')
+      await authService.issueSession(authenticated, 'web')
+    }
     return { ok: true }
   },
 
   /* ------------------------------------------------- email verification */
 
-  async verifyEmail(token: string): Promise<Result | UnionError> {
-    const parsed = parseInput(verificationTokenSchema, token)
-    if (!parsed.ok) return fail('TOKEN_INVALID', { message: 'The verification link is invalid.' })
+  async verifyEmail(input: VerifyEmailInput): Promise<Result | UnionError> {
+    const parsed = parseInput(verifyEmailSchema, input)
+    if (!parsed.ok) return parsed
 
-    const limited = await guardRateLimit('token')
+    const session = await authService.verifySession()
+    if (!session && !parsed.data.email)
+      return fail('INPUT_INVALID', { message: 'Email is required.' })
+
+    const identity = session ? `user:${session.userId}` : `id:${parsed.data.email!}`
+    const limited =
+      (await guardRateLimit('emailOtpVerify', [identity])) ??
+      (await guardRateLimit('emailOtpVerifyIp'))
     if (limited) return limited
 
-    const row = await emailTokenRepo.findByHash(sha256(parsed.data))
-    if (!row || row.usedAt || row.type !== 'VERIFIKASI')
-      return fail('TOKEN_INVALID', { message: 'The verification link is invalid.' })
+    const user = session
+      ? await userRepo.findById(session.userId)
+      : await userRepo.findByEmail(parsed.data.email!)
+
+    if (!user || !user.active || user.emailVerified)
+      return fail('TOKEN_INVALID', {
+        message: 'The verification code is invalid or has expired.',
+      })
 
     const now = realClock.now()
-    if (row.validUntil < now)
-      return fail('TOKEN_EXPIRED', { message: 'The verification link has expired. Request a new one.' })
+    const row = await emailOtpRepo.findLatestActive(
+      user.id,
+      emailOtpRepo.EMAIL_OTP_PURPOSE,
+      now,
+    )
+    if (!row)
+      return fail('TOKEN_INVALID', {
+        message: 'The verification code is invalid or has expired.',
+      })
 
-    await emailTokenRepo.consumeVerification(row.id, row.userId, now)
+    if (!matchesOtpCode(user.id, parsed.data.code, row.codeHash, loadJwtSecret())) {
+      await emailOtpRepo.recordFailure(
+        row.id,
+        user.id,
+        emailOtpRepo.EMAIL_OTP_PURPOSE,
+        EMAIL_OTP_MAX_ATTEMPTS,
+        now,
+      )
+      return fail('TOKEN_INVALID', {
+        message: 'The verification code is invalid or has expired.',
+      })
+    }
+
+    const consumed = await emailOtpRepo.consumeVerification(
+      row.id,
+      user.id,
+      emailOtpRepo.EMAIL_OTP_PURPOSE,
+      EMAIL_OTP_MAX_ATTEMPTS,
+      now,
+    )
+    if (!consumed)
+      return fail('TOKEN_INVALID', {
+        message: 'The verification code is invalid or has expired.',
+      })
+
     return { ok: true }
   },
 
-  async resendVerification(email: string): Promise<Result | UnionError> {
+  /** Seconds until the signed-in user may request another verification code. */
+  async verificationCooldown(): Promise<number> {
+    const session = await authService.verifySession()
+    if (!session) return 0
+
+    const now = realClock.now()
+    const row = await emailOtpRepo.findLatestActive(
+      session.userId,
+      emailOtpRepo.EMAIL_OTP_PURPOSE,
+      now,
+    )
+    if (!row) return 0
+
+    const remainingMs = row.createdAt.getTime() + EMAIL_OTP_RESEND_DELAY_MS - now.getTime()
+    return Math.max(0, Math.ceil(remainingMs / 1000))
+  },
+
+  async resendVerification(
+    email: string,
+    options: { deferEmail?: boolean } = {},
+  ): Promise<Result | UnionError> {
     const parsed = parseInput(emailSchema, email)
     if (!parsed.ok) return parsed
 
@@ -219,8 +315,20 @@ export const authService = {
     const user = await userRepo.findByEmail(parsed.data)
 
     if (user && user.active && !user.emailVerified) {
-      await emailTokenRepo.markPendingUsed(user.id, 'VERIFIKASI', realClock.now())
-      await sendVerification(user)
+      const now = realClock.now()
+      const active = await emailOtpRepo.findLatestActive(
+        user.id,
+        emailOtpRepo.EMAIL_OTP_PURPOSE,
+        now,
+      )
+
+      // Keep the same success response for every address (anti-enumeration).
+      // Within the cooldown window this is intentionally a no-op.
+      if (active && now.getTime() - active.createdAt.getTime() < EMAIL_OTP_RESEND_DELAY_MS) {
+        return { ok: true }
+      }
+
+      await sendVerification(user, options.deferEmail)
     }
 
     // Same answer regardless — do not reveal which emails exist.

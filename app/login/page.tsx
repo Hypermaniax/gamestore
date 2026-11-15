@@ -3,12 +3,11 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
-import { loginAction } from '@/src/controllers/auth.controller'
-import { loginSchema } from '@/src/validation/auth'
+import { loginFormAction, type LoginFormState } from '@/src/controllers/auth.controller'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { TotpLoginForm } from '@/components/totp-login-form'
 
@@ -19,41 +18,24 @@ const ERROR_COPY: Record<string, string> = {
   TOO_MANY_REQUESTS: 'Too many attempts. Please try again later.',
 }
 
+const initialState: LoginFormState = { error: null }
+
 export default function LoginForm() {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [challengeToken, setChallengeToken] = useState<string | null>(null)
-
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const parsed = loginSchema.safeParse({
-      usernameOrEmail: String(formData.get('identity') ?? ''),
-      password: String(formData.get('password') ?? ''),
-    })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
-      return
-    }
-
-    startTransition(async () => {
-      const result = await loginAction(parsed.data)
-      if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? 'Something went wrong. Please try again.')
-        return
+  const [state, formAction, pending] = useActionState<LoginFormState, FormData>(
+    async (prevState, formData) => {
+      const result = await loginFormAction(prevState, formData)
+      if (result.challengeToken) setChallengeToken(result.challengeToken)
+      if (result.redirectTo) {
+        router.push(result.redirectTo)
+        router.refresh()
       }
-      if (result.jalur === 'perlu-totp') {
-        setChallengeToken(result.token)
-        return
-      }
-      if (result.jalur === 'perlu-setup-totp') {
-        router.push(`/totp/setup?token=${encodeURIComponent(result.token)}`)
-        return
-      }
-      router.push(result.peran === 'ADMIN' ? '/panel' : '/')
-      router.refresh()
-    })
-  }
+      return result
+    },
+    initialState,
+  )
+  const error = state.error ? (ERROR_COPY[state.code ?? ''] ?? state.error) : null
 
   function handleTotpSuccess(result: { peran: string }) {
     router.push(result.peran === 'ADMIN' ? '/panel' : '/')
@@ -84,14 +66,13 @@ export default function LoginForm() {
             onSuccess={handleTotpSuccess}
             onBack={() => {
               setChallengeToken(null)
-              setError(null)
             }}
           />
         </div>
       ) : (
         <form
           noValidate
-          action={handleSubmit}
+          action={formAction}
           className="relative z-10 w-full max-w-md rounded-[28px] border border-border bg-popover p-8 shadow-[0_30px_100px_rgba(0,0,0,.35)] sm:p-10"
         >
         <p className="text-xs font-bold uppercase tracking-[.18em] text-brand-deep">Welcome</p>
@@ -108,6 +89,7 @@ export default function LoginForm() {
           name="identity"
           autoComplete="username"
           autoFocus
+          disabled={pending}
           aria-invalid={!!error}
           className="field mt-2"
           placeholder="name@email.com"
@@ -121,6 +103,7 @@ export default function LoginForm() {
           name="password"
           type="password"
           autoComplete="current-password"
+          disabled={pending}
           aria-invalid={!!error}
           className="field mt-2"
           placeholder="At least 8 characters"

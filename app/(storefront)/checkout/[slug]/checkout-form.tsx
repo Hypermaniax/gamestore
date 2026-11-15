@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import {
@@ -392,7 +393,11 @@ export function CheckoutForm({
             )}
             {!data.user.emailVerified && (
               <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                Verify your email first. Open your account page to see the status.
+                Verify your email first.{' '}
+                <Link href="/verify-email" className="underline underline-offset-2">
+                  Enter your verification code
+                </Link>
+                .
               </p>
             )}
             {error && (

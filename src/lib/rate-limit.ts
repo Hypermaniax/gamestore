@@ -18,6 +18,8 @@ export const RATE_LIMITS = {
   register: { points: 5, durationSeconds: 3600, perIp: true },
   email: { points: 5, durationSeconds: 900, perIp: false },
   emailIp: { points: 20, durationSeconds: 3600, perIp: true },
+  emailOtpVerify: { points: 10, durationSeconds: 900, perIp: false },
+  emailOtpVerifyIp: { points: 30, durationSeconds: 900, perIp: true },
   token: { points: 20, durationSeconds: 3600, perIp: true },
   refresh: { points: 60, durationSeconds: 3600, perIp: true },
   totp: { points: 10, durationSeconds: 900, perIp: false },

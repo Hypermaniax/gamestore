@@ -61,7 +61,7 @@ Legenda:
 - [x] Halaman konfirmasi ganti email `/change-email/confirm`
 - [x] Logout sesi saat ini
 - [x] Form minta ganti email dari halaman akun
-- [ ] Tombol kirim ulang verifikasi email
+- [x] Tombol kirim ulang verifikasi email
 - [x] Setup TOTP dari halaman akun
 - [x] Tampilan QR TOTP
 - [x] Aktivasi TOTP dengan kode 6 digit
@@ -114,7 +114,7 @@ Catatan: seluruh menu sidebar mengarah ke halaman panel yang sudah dibuat.
 ### Autentikasi & keamanan
 
 - [x] Register role PEMBELI
-- [x] Verifikasi email dengan token hash
+- [x] Verifikasi email dengan kode OTP 6 digit (HMAC hash)
 - [x] Kirim ulang verifikasi email
 - [x] Login username/email
 - [x] Access JWT di cookie httpOnly
@@ -136,7 +136,7 @@ Catatan: seluruh menu sidebar mengarah ke halaman panel yang sudah dibuat.
 - [x] Paksa logout user oleh admin
 - [x] Audit log admin
 - [x] Audit reveal
-- [x] Rate limit login/register/email/token/refresh/TOTP
+- [x] Rate limit login/register/email/token/refresh/TOTP/email OTP
 - [x] Validasi Zod bersama client/server
 - [x] Error typed-union `{ ok, code, pesan }`
 
@@ -182,7 +182,7 @@ Catatan: seluruh menu sidebar mengarah ke halaman panel yang sudah dibuat.
 
 ### Seed & database
 
-- [x] 27 tabel MVP + constraint
+- [x] 28 tabel MVP + constraint
 - [x] Unique parsial anti double-buy
 - [x] CHECK konsistensi transaksi/refund
 - [x] Index parsial job
@@ -300,7 +300,7 @@ Catatan: seluruh menu sidebar mengarah ke halaman panel yang sudah dibuat.
 | `/` | Storefront dan katalog database |
 | `/login` | Login |
 | `/register` | Registrasi |
-| `/verify-email?token=...` | Verifikasi email |
+| `/verify-email` | Verifikasi email dengan kode 6 digit |
 | `/forgot-password` | Minta link reset |
 | `/reset-password?token=...` | Password baru |
 | `/change-email/confirm` | Konfirmasi dua token ganti email |
@@ -369,10 +369,16 @@ Preview email development ada di:
 .next/dev/mail/*.txt
 ```
 
-Cari link verifikasi/reset/ganti email terbaru:
+Cari kode verifikasi email terbaru:
 
 ```bash
-rg -o 'http://localhost:3000/(verifikasi-email|reset-password|ganti-email/konfirmasi)\?token=[a-f0-9]+' .next/dev/mail | tail -n 1
+rg -o 'verification code is [0-9]{6}' .next/dev/mail | tail -n 1
+```
+
+Cari link reset/ganti email terbaru:
+
+```bash
+rg -o 'http://localhost:3000/(reset-password|change-email/confirm)\?token=[a-f0-9]+' .next/dev/mail | tail -n 1
 ```
 
 Deployment produksi, TOTP darurat, retensi/PDP, backup, dan alert: lihat `docs/DEPLOYMENT.md`.

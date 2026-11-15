@@ -128,8 +128,13 @@ export async function readChallengeToken(
 
 /** Read & verify the session cookie — null when missing or invalid. */
 export async function readSession(): Promise<SessionClaims | null> {
-  const store = await cookies()
-  const value = store.get(SESSION_COOKIE)?.value
+  let value: string | undefined
+  try {
+    const store = await cookies()
+    value = store.get(SESSION_COOKIE)?.value
+  } catch {
+    return null
+  }
   if (!value) return null
   try {
     const verified = await jwtVerify<JwtClaims>(value, loadJwtSecret())

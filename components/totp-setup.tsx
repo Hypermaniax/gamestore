@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
@@ -33,24 +33,17 @@ function copyToClipboard(value: string): Promise<void> {
 
 export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [setup, setSetup] = useState<SetupData | null>(null)
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
-
-  function markCopied(key: string) {
-    setCopied(key)
-    window.setTimeout(() => setCopied(null), 1500)
-  }
-
-  function beginSetup() {
-    setError(null)
-    startTransition(async () => {
+  const [setupState, setupFormAction, setupPending] = useActionState<
+    { error: string | null },
+    FormData
+  >(
+    async () => {
       const result = await totpSetupAction({ challengeToken })
       if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? result.message)
-        return
+        return { error: ERROR_COPY[result.code] ?? result.message }
       }
 
       let qrDataUrl = ''
@@ -64,28 +57,39 @@ export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
         qrDataUrl = ''
       }
       setSetup({ secret: result.secret, otpauthUri: result.otpauthUri, qrDataUrl })
-    })
-  }
+      return { error: null }
+    },
+    { error: null },
+  )
+  const [activateState, activateFormAction, activatePending] = useActionState<
+    { error: string | null },
+    FormData
+  >(
+    async (_prevState, formData) => {
+      const parsed = totpActivateSchema.safeParse({
+        challengeToken,
+        code: String(formData.get('kode') ?? ''),
+      })
+      if (!parsed.success) {
+        return { error: parsed.error.issues[0]?.message ?? 'Invalid TOTP code.' }
+      }
 
-  function activate(formData: FormData) {
-    setError(null)
-    const parsed = totpActivateSchema.safeParse({
-      challengeToken,
-      code: String(formData.get('kode') ?? ''),
-    })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid TOTP code.')
-      return
-    }
-
-    startTransition(async () => {
       const result = await totpActivateAction(parsed.data)
       if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? result.message)
-        return
+        return { error: ERROR_COPY[result.code] ?? result.message }
       }
+
       setRecoveryCodes(result.recoveryCodes)
-    })
+      return { error: null }
+    },
+    { error: null },
+  )
+  const setupError = setupState.error
+  const activateError = activateState.error
+
+  function markCopied(key: string) {
+    setCopied(key)
+    window.setTimeout(() => setCopied(null), 1500)
   }
 
   function finish() {
@@ -190,7 +194,7 @@ export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
               {copied === 'secret' ? 'Secret copied' : 'Copy secret'}
             </button>
 
-            <form noValidate action={activate} className="mt-5">
+            <form noValidate action={activateFormAction} className="mt-5">
               <label htmlFor="totp-activate" className="text-xs font-bold">
                 6-digit code from your app
               </label>
@@ -200,24 +204,24 @@ export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={6}
-                disabled={pending}
-                aria-invalid={!!error}
+                disabled={activatePending}
+                aria-invalid={!!activateError}
                 className="field mt-2 font-mono tracking-[.25em]"
                 placeholder="123456"
               />
 
-              {error && (
+              {activateError && (
                 <p role="alert" className="mt-3 text-xs font-semibold text-destructive">
-                  {error}
+                  {activateError}
                 </p>
               )}
 
               <button
                 type="submit"
-                disabled={pending}
+                disabled={activatePending}
                 className="mt-4 h-11 w-full rounded-xl bg-brand text-sm font-bold text-brand-ink transition hover:brightness-105 active:scale-[.99] disabled:opacity-60"
               >
-                {pending ? 'Activating…' : 'Activate TOTP'}
+                {activatePending ? 'Activating…' : 'Activate TOTP'}
               </button>
             </form>
           </div>
@@ -245,20 +249,21 @@ export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
         shown after activation.
       </p>
 
-      {error && (
+      {setupError && (
         <p role="alert" className="mt-4 text-xs font-semibold text-destructive">
-          {error}
+          {setupError}
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={beginSetup}
-        disabled={pending}
-        className="mt-5 h-11 w-full rounded-xl bg-foreground text-sm font-bold text-background transition hover:opacity-90 active:scale-[.99] disabled:opacity-60"
-      >
-        {pending ? 'Preparing…' : 'Activate TOTP'}
-      </button>
+      <form action={setupFormAction} className="mt-5">
+        <button
+          type="submit"
+          disabled={setupPending}
+          className="h-11 w-full rounded-xl bg-foreground text-sm font-bold text-background transition hover:opacity-90 active:scale-[.99] disabled:opacity-60"
+        >
+          {setupPending ? 'Preparing…' : 'Activate TOTP'}
+        </button>
+      </form>
     </div>
   )
 }

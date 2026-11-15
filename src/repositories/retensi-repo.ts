@@ -44,3 +44,13 @@ export function hapusEmailToken(cutoff: Date): Promise<Prisma.BatchPayload> {
     },
   })
 }
+
+/** Delete verification codes 30 days after expiry and (when present) consumption. */
+export function hapusEmailOtp(cutoff: Date): Promise<Prisma.BatchPayload> {
+  return prisma.emailOtp.deleteMany({
+    where: {
+      expiresAt: { lte: cutoff },
+      OR: [{ consumedAt: null }, { consumedAt: { lte: cutoff } }],
+    },
+  })
+}

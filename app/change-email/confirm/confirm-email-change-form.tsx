@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import Link from 'next/link'
 import { AuthShell } from '@/components/auth-shell'
 import { confirmEmailChangeAction } from '@/src/controllers/auth.controller'
@@ -23,33 +23,30 @@ function extractToken(value: string): string {
 }
 
 export function ConfirmEmailChangeForm({ token }: { token: string }) {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [sukses, setSukses] = useState(false)
+  const [state, formAction, pending] = useActionState<{ error: string | null }, FormData>(
+    async (_prevState, formData) => {
+      const tokenA = extractToken(String(formData.get('tokenA') ?? ''))
+      const tokenB = extractToken(String(formData.get('tokenB') ?? ''))
+      if (!tokenA || !tokenB) {
+        return { error: 'Both links (old email and new email) are required.' }
+      }
+      const parsed = confirmEmailChangeSchema.safeParse({ tokenLama: tokenA, tokenBaru: tokenB })
+      if (!parsed.success) {
+        return { error: parsed.error.issues[0]?.message ?? 'Both links are required.' }
+      }
 
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const tokenA = extractToken(String(formData.get('tokenA') ?? ''))
-    const tokenB = extractToken(String(formData.get('tokenB') ?? ''))
-    if (!tokenA || !tokenB) {
-      setError('Both links (old email and new email) are required.')
-      return
-    }
-    const parsed = confirmEmailChangeSchema.safeParse({ tokenLama: tokenA, tokenBaru: tokenB })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Both links are required.')
-      return
-    }
-
-    startTransition(async () => {
       const result = await confirmEmailChangeAction(parsed.data)
       if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? result.message)
-        return
+        return { error: ERROR_COPY[result.code] ?? result.message }
       }
+
       setSukses(true)
-    })
-  }
+      return { error: null }
+    },
+    { error: null },
+  )
+  const error = state.error
 
   return (
     <AuthShell>
@@ -70,7 +67,7 @@ export function ConfirmEmailChangeForm({ token }: { token: string }) {
           </Link>
         </div>
       ) : (
-        <form noValidate action={handleSubmit}>
+        <form noValidate action={formAction}>
           <p className="mt-2 text-sm text-muted-foreground">
             Open the links from the old email and the new email, then paste both here. Order
             doesn&apos;t matter.

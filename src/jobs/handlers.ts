@@ -116,10 +116,11 @@ export async function retensiJob(): Promise<JobResult> {
   const tokenCutoff = new Date(now.getTime() - tokenHari * DAY_MS)
   const refresh = await retensiRepo.hapusRefreshKedaluwarsa(tokenCutoff)
   const email = await retensiRepo.hapusEmailToken(tokenCutoff)
+  const emailOtp = await retensiRepo.hapusEmailOtp(tokenCutoff)
 
   return {
     ok: true,
-    processed: webhook.count + snapshot.count + refresh + email.count,
+    processed: webhook.count + snapshot.count + refresh + email.count + emailOtp.count,
   }
 }
 

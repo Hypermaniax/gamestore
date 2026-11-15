@@ -1,7 +1,7 @@
 # 🗺️ PHASES.md — Rencana Fase Pengerjaan
 
 > Pendamping `PLAN.md` (v13) — pecahan §12 menjadi checklist kerja.
-> Sumber kebenaran endpoint: `API.md` (v10); skema: `ERD.md` (v10, **29 tabel — MVP 27**).
+> Sumber kebenaran endpoint: `API.md` (v10); skema: `ERD.md` (v10, **30 tabel — MVP 28**).
 > Satu fase = satu cabang kerja. Jangan naik fase sebelum "Selesai bila" terpenuhi.
 > Status: ⬜ belum mulai · 🔄 sedang · ✅ selesai
 
@@ -20,7 +20,7 @@
 | Fase | Nama | Fokus inti | Tergantung |
 |---|---|---|---|
 | 0 | Reset | Bersihkan scaffold & database | — |
-| 1 | Scaffold app | Next.js + shadcn/ui + Prisma (27 tabel) + Postgres lokal + seed | 0 · ⛔ keputusan fee |
+| 1 | Scaffold app | Next.js + shadcn/ui + Prisma (28 tabel) + Postgres lokal + seed | 0 · ⛔ keputusan fee |
 | 2 | Auth + RBAC | Register/verifikasi/JWT/refresh + TOTP + users + audit | 1 |
 | 3 | Katalog | Master + akun + kredensial AES-GCM + foto + slug | 1 |
 | 4 | Diskon | Strategy promo & voucher + kuota atomik + CRUD | 1 |
@@ -48,7 +48,7 @@
 
 - [x] ⛔ **Keputusan fee pembelian** (PLAN §2 "Perlu dikonfirmasi" #2) diputuskan **sebelum migration pertama Prisma** — ✅ **opsi B: toko tanggung** (default ERD, tanpa kolom `biaya_layanan`; reversible via 1 migration, ingatkan user sebelum go-live)
 - [x] Inisialisasi Next.js (App Router + TypeScript) di root repo + **shadcn/ui init** + Prisma + PostgreSQL; Route Handlers `app/api/v1/*` di **Node runtime**; struktur: Route Handler → service (`lib/`) → Prisma; zod + tipe shared untuk fe & API
-- [x] Migration pertama Prisma: **27 tabel MVP** + seluruh index & CHECK (migration `init` + `hardening_constraints`):
+- [x] Migration pertama Prisma: **28 tabel MVP** + seluruh index & CHECK (migration `init` + `hardening_constraints`):
   - unique parsial anti double-buy `transactions(account_id) WHERE status IN ('RESERVED','PAID','DISPUTED')` ✅
   - satu tagihan aktif `payments(transaction_id) WHERE status='PENDING'`; satu tema aktif ✅
   - `payments(external_id)` unique; `incoming_fund_id` unique parsial; index biasa `xendit_id` ✅
@@ -63,11 +63,11 @@
 - [x] Postgres 18 lokal (sudah berjalan, **tanpa Docker**): buat DB `gamestore_dev` (+ shadow + `gamestore_test`) + user aplikasi (DML-only) + user migrasi (DDL) via SQL
 - [x] `.env.example` lengkap tanpa nilai rahasia (sesuai §13); data contoh dev — **game_accounts contoh ditunda ke Fase 3** (butuh AES keyring untuk kredensial)
 
-**Selesai bila:** `npm run build` sukses ✅; `\dt` menampilkan 27 tabel MVP ✅; seed terisi ✅.
+**Selesai bila:** `npm run build` sukses ✅; `\dt` menampilkan 28 tabel MVP ✅; seed terisi ✅.
 
 ## Fase 2 — Auth + RBAC-resolve 🔄
 
-- [x] Register (BCrypt ≥ 8, role PEMBELI) + verifikasi email (token hash, kedaluwarsa, kirim-ulang)
+- [x] Register (BCrypt ≥ 8, role PEMBELI) + verifikasi email (kode OTP 6 digit, HMAC hash, kedaluwarsa, kirim-ulang)
 - [x] Ganti email dua-tahap (`new_email` + konfirmasi); lupa/reset/ganti password
 - [x] Login: JWT 15–30 menit + `token_version` + cek `active` tiap aksi/access-request
 - [x] Refresh: cookie httpOnly + Secure + SameSite=Strict, **rotasi + toleransi 10–30 dtk**; logout satu-sesi & logout-semua

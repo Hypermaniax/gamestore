@@ -10,6 +10,13 @@ import { errorDetail, logger, maskEmail } from '../lib/logger'
 
 let cached: Transporter | null = null
 
+export type EmailMessage = {
+  to: string
+  subject: string
+  text: string
+  html?: string
+}
+
 function baseUrl(): string {
   return process.env.APP_BASE_URL ?? 'http://localhost:3000'
 }
@@ -24,6 +31,12 @@ function smtp(): Transporter | null {
     host,
     port,
     secure: port === 465,
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 50,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
     ...(user ? { auth: { user, pass: process.env.MAIL_PASSWORD ?? '' } } : {}),
   })
   return cached
@@ -37,7 +50,7 @@ async function savePreview(to: string, subject: string, body: string): Promise<v
   logger.info('email.preview', { file, to: maskEmail(to) })
 }
 
-async function deliver(to: string, subject: string, body: string): Promise<void> {
+async function deliver(to: string, subject: string, body: string, html?: string): Promise<void> {
   const transport = smtp()
   if (transport) {
     try {
@@ -46,6 +59,7 @@ async function deliver(to: string, subject: string, body: string): Promise<void>
         to,
         subject,
         text: body,
+        ...(html ? { html } : {}),
       })
       logger.info('email.terkirim', { to: maskEmail(to) })
       return
@@ -68,12 +82,8 @@ async function deliver(to: string, subject: string, body: string): Promise<void>
 }
 
 export const emailService = {
-  async sendEmail(to: string, subject: string, body: string): Promise<void> {
-    await deliver(to, subject, body)
-  },
-
-  verificationLink(token: string): string {
-    return `${baseUrl()}/verify-email?token=${token}`
+  async sendEmail(to: string, subject: string, body: string, html?: string): Promise<void> {
+    await deliver(to, subject, body, html)
   },
 
   passwordResetLink(token: string): string {

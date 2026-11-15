@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import { changePasswordAction } from '@/src/controllers/auth.controller'
 import { changePasswordSchema } from '@/src/validation/auth'
@@ -15,36 +15,33 @@ const ERROR_COPY: Record<string, string> = {
 }
 
 export function ChangePasswordForm() {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [sukses, setSukses] = useState(false)
+  const [state, formAction, pending] = useActionState<{ error: string | null }, FormData>(
+    async (_prevState, formData) => {
+      const passwordLama = String(formData.get('passwordLama') ?? '')
+      const passwordBaru = String(formData.get('passwordBaru') ?? '')
+      const konfirmasi = String(formData.get('konfirmasi') ?? '')
 
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const passwordLama = String(formData.get('passwordLama') ?? '')
-    const passwordBaru = String(formData.get('passwordBaru') ?? '')
-    const konfirmasi = String(formData.get('konfirmasi') ?? '')
+      if (passwordBaru !== konfirmasi) {
+        return { error: 'New password confirmation does not match.' }
+      }
 
-    if (passwordBaru !== konfirmasi) {
-      setError('New password confirmation does not match.')
-      return
-    }
+      const parsed = changePasswordSchema.safeParse({ passwordLama, passwordBaru })
+      if (!parsed.success) {
+        return { error: parsed.error.issues[0]?.message ?? 'Invalid data.' }
+      }
 
-    const parsed = changePasswordSchema.safeParse({ passwordLama, passwordBaru })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
-      return
-    }
-
-    startTransition(async () => {
       const result = await changePasswordAction(parsed.data)
       if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? result.message)
-        return
+        return { error: ERROR_COPY[result.code] ?? result.message }
       }
+
       setSukses(true)
-    })
-  }
+      return { error: null }
+    },
+    { error: null },
+  )
+  const error = state.error
 
   return (
     <section className="flex flex-col rounded-2xl border border-border bg-background/40 p-5">
@@ -69,7 +66,6 @@ export function ChangePasswordForm() {
             type="button"
             onClick={() => {
               setSukses(false)
-              setError(null)
             }}
             className="self-start text-xs font-bold text-brand-deep underline-offset-4 hover:underline"
           >
@@ -77,7 +73,7 @@ export function ChangePasswordForm() {
           </button>
         </div>
       ) : (
-        <form noValidate action={handleSubmit} className="mt-5 space-y-4">
+        <form noValidate action={formAction} className="mt-5 space-y-4">
           <div>
             <label htmlFor="password-lama" className="text-xs font-bold">
               Current password

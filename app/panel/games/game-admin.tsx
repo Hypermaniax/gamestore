@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, type ReactNode } from 'react'
+import { useActionState, useState, useTransition, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Plus, Power, PowerOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -98,6 +98,76 @@ export function GameAdmin({
   const [newTypeOpen, setNewTypeOpen] = useState(false)
   const [newType, setNewType] = useState<NewGameType>(emptyNewGameType)
   const [newTypeError, setNewTypeError] = useState<string | null>(null)
+  const [gameErrorDismissed, setGameErrorDismissed] = useState(true)
+  const [gameTypeErrorDismissed, setGameTypeErrorDismissed] = useState(true)
+  const [gameState, gameFormAction, gamePending] = useActionState<
+    { error: string | null },
+    FormData
+  >(
+    async () => {
+      if (!gameEditor) return { error: null }
+      const skema = draftToSchema(gameEditor.form.skema)
+      if (!skema.ok) return { error: skema.message }
+
+      const { form } = gameEditor
+      const input = {
+        code: form.code,
+        name: form.name,
+        typeId: form.typeId,
+        iconUrl: form.iconUrl || undefined,
+        attributeSchema: skema.data,
+      }
+      const result =
+        gameEditor.mode === 'create'
+          ? await createGameAction(input)
+          : await updateGameAction({
+              id: gameEditor.id!,
+              ...input,
+              iconUrl: form.iconUrl || null,
+            })
+      if (!result.ok) return { error: result.message ?? 'Action failed.' }
+
+      setNotice(gameEditor.mode === 'create' ? 'Game created.' : 'Game updated.')
+      setGameEditor(null)
+      resetNewType()
+      router.refresh()
+      return { error: null }
+    },
+    { error: null },
+  )
+  const [gameTypeState, gameTypeFormAction, gameTypePending] = useActionState<
+    { error: string | null },
+    FormData
+  >(
+    async () => {
+      if (!gameTypeEditor) return { error: null }
+      const { form } = gameTypeEditor
+      const result =
+        gameTypeEditor.mode === 'create'
+          ? await createGameTypeAction({
+              code: form.code,
+              name: form.name,
+              order: Number(form.order),
+            })
+          : await updateGameTypeAction({
+              id: gameTypeEditor.id!,
+              code: form.code,
+              name: form.name,
+              order: Number(form.order),
+              active: form.active,
+            })
+      if (!result.ok) return { error: result.message ?? 'Action failed.' }
+
+      setNotice(gameTypeEditor.mode === 'create' ? 'Game type created.' : 'Game type updated.')
+      setGameTypeEditor(null)
+      router.refresh()
+      return { error: null }
+    },
+    { error: null },
+  )
+  const gameFormError = gameState.error && !gameErrorDismissed ? gameState.error : null
+  const gameTypeFormError =
+    gameTypeState.error && !gameTypeErrorDismissed ? gameTypeState.error : null
 
   const availableGameTypes = [
     ...gameTypes,
@@ -132,6 +202,7 @@ export function GameAdmin({
     setError(null)
     setNotice(null)
     resetNewType()
+    setGameErrorDismissed(true)
     setGameEditor({ mode: 'create', form: emptyGame(availableGameTypes) })
   }
 
@@ -139,6 +210,7 @@ export function GameAdmin({
     setError(null)
     setNotice(null)
     resetNewType()
+    setGameErrorDismissed(true)
     setGameEditor({
       mode: 'edit',
       id: game.id,
@@ -155,7 +227,24 @@ export function GameAdmin({
   function openCreateGameType() {
     setError(null)
     setNotice(null)
+    setGameTypeErrorDismissed(true)
     setGameTypeEditor({ mode: 'create', form: emptyGameType() })
+  }
+
+  function openEditGameType(item: GameType) {
+    setError(null)
+    setNotice(null)
+    setGameTypeErrorDismissed(true)
+    setGameTypeEditor({
+      mode: 'edit',
+      id: item.id,
+      form: {
+        code: item.code,
+        name: item.name,
+        order: String(item.order),
+        active: item.active,
+      },
+    })
   }
 
   function createInlineGameType() {
@@ -176,76 +265,6 @@ export function GameAdmin({
       setNewTypeOpen(false)
       router.refresh()
     })
-  }
-
-  function openEditGameType(item: GameType) {
-    setError(null)
-    setNotice(null)
-    setGameTypeEditor({
-      mode: 'edit',
-      id: item.id,
-      form: {
-        code: item.code,
-        name: item.name,
-        order: String(item.order),
-        active: item.active,
-      },
-    })
-  }
-
-  function saveGame(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!gameEditor) return
-    const skema = draftToSchema(gameEditor.form.skema)
-    if (!skema.ok) {
-      setError(skema.message)
-      return
-    }
-
-    const { form } = gameEditor
-    const input = {
-      code: form.code,
-      name: form.name,
-      typeId: form.typeId,
-      iconUrl: form.iconUrl || undefined,
-      attributeSchema: skema.data,
-    }
-
-    run(
-      () =>
-        gameEditor.mode === 'create'
-          ? createGameAction(input)
-          : updateGameAction({
-              id: gameEditor.id!,
-              ...input,
-              iconUrl: form.iconUrl || null,
-            }),
-      gameEditor.mode === 'create' ? 'Game created.' : 'Game updated.',
-    )
-  }
-
-  function saveGameType(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!gameTypeEditor) return
-    const { form } = gameTypeEditor
-
-    run(
-      () =>
-        gameTypeEditor.mode === 'create'
-          ? createGameTypeAction({
-              code: form.code,
-              name: form.name,
-              order: Number(form.order),
-            })
-          : updateGameTypeAction({
-              id: gameTypeEditor.id!,
-              code: form.code,
-              name: form.name,
-              order: Number(form.order),
-              active: form.active,
-            }),
-      gameTypeEditor.mode === 'create' ? 'Game type created.' : 'Game type updated.',
-    )
   }
 
   return (
@@ -436,15 +455,20 @@ export function GameAdmin({
       <Dialog
         open={Boolean(gameEditor)}
         onOpenChange={(open) => {
-          if (!open && !pending) {
+          if (!open && !pending && !gamePending) {
             setGameEditor(null)
             setError(null)
+            setGameErrorDismissed(true)
             resetNewType()
           }
         }}
       >
         <DialogContent className="panel-scroll max-h-[92dvh] w-[min(72rem,calc(100vw-2rem))] max-w-none overflow-y-auto sm:max-w-none">
-          <form className="space-y-5" onSubmit={saveGame}>
+          <form
+            className="space-y-5"
+            action={gameFormAction}
+            onSubmit={() => setGameErrorDismissed(false)}
+          >
             <DialogHeader>
               <DialogTitle>{gameEditor?.mode === 'create' ? 'Add game' : 'Edit game'}</DialogTitle>
               <DialogDescription>
@@ -572,15 +596,25 @@ export function GameAdmin({
                   disabled={pending}
                 />
 
-                {error ? (
-                  <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+                {gameFormError ? (
+                  <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{gameFormError}</p>
                 ) : null}
 
                 <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-                  <Button type="button" variant="ghost" disabled={pending} onClick={() => { setGameEditor(null); setError(null); resetNewType() }}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={pending || gamePending}
+                    onClick={() => {
+                      setGameEditor(null)
+                      setError(null)
+                      setGameErrorDismissed(true)
+                      resetNewType()
+                    }}
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={pending}>
+                  <Button type="submit" disabled={gamePending}>
                     {gameEditor.mode === 'create' ? 'Add game' : 'Save changes'}
                   </Button>
                 </div>
@@ -593,14 +627,19 @@ export function GameAdmin({
       <Dialog
         open={Boolean(gameTypeEditor)}
         onOpenChange={(open) => {
-          if (!open && !pending) {
+          if (!open && !pending && !gameTypePending) {
             setGameTypeEditor(null)
             setError(null)
+            setGameTypeErrorDismissed(true)
           }
         }}
       >
         <DialogContent className="w-[min(32rem,calc(100vw-2rem))] max-w-none sm:max-w-none">
-          <form className="space-y-4" onSubmit={saveGameType}>
+          <form
+            className="space-y-4"
+            action={gameTypeFormAction}
+            onSubmit={() => setGameTypeErrorDismissed(false)}
+          >
             <DialogHeader>
               <DialogTitle>{gameTypeEditor?.mode === 'create' ? 'Add game type' : 'Edit game type'}</DialogTitle>
               <DialogDescription>
@@ -642,15 +681,24 @@ export function GameAdmin({
                   </label>
                 </div>
 
-                {error ? (
-                  <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+                {gameTypeFormError ? (
+                  <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{gameTypeFormError}</p>
                 ) : null}
 
                 <div className="flex justify-end gap-2 border-t pt-4">
-                  <Button type="button" variant="ghost" disabled={pending} onClick={() => { setGameTypeEditor(null); setError(null) }}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={pending || gameTypePending}
+                    onClick={() => {
+                      setGameTypeEditor(null)
+                      setError(null)
+                      setGameTypeErrorDismissed(true)
+                    }}
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={pending}>
+                  <Button type="submit" disabled={gameTypePending}>
                     {gameTypeEditor.mode === 'create' ? 'Add type' : 'Save changes'}
                   </Button>
                 </div>

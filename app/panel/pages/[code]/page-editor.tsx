@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,56 +19,46 @@ export function PageEditor({
   version: number
 }) {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [form, setForm] = useState({ title: title, bodyMarkdown })
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-
-  function save() {
-    setError(null)
-    setNotice(null)
-    startTransition(async () => {
-      const result = await updatePageDraftAction({ code, ...form })
-      if (!result.ok) {
-        setError(result.message)
-        return
-      }
-      setNotice('Draft saved. The public page will not change until published.')
-      router.refresh()
-    })
-  }
-
-  function publish() {
-    setError(null)
-    setNotice(null)
-    startTransition(async () => {
+  const [form, setForm] = useState({ title, bodyMarkdown })
+  const [state, formAction, pending] = useActionState<
+    { error: string | null; notice: string | null },
+    FormData
+  >(
+    async (_prevState, formData) => {
+      const publish = formData.get('intent') === 'publish'
       const saved = await updatePageDraftAction({ code, ...form })
-      if (!saved.ok) {
-        setError(saved.message)
-        return
+      if (!saved.ok) return { error: saved.message, notice: null }
+
+      if (!publish) {
+        router.refresh()
+        return {
+          error: null,
+          notice: 'Draft saved. The public page will not change until published.',
+        }
       }
+
       const result = await publishPageAction({ code })
-      if (!result.ok) {
-        setError(result.message)
-        return
-      }
-      setNotice(`Version ${result.data.version} published.`)
+      if (!result.ok) return { error: result.message, notice: null }
+
       router.refresh()
-    })
-  }
+      return { error: null, notice: `Version ${result.data.version} published.` }
+    },
+    { error: null, notice: null },
+  )
+  const { error, notice } = state
 
   return (
-    <div className="space-y-4 rounded-xl border bg-card p-4">
+    <form action={formAction} className="space-y-4 rounded-xl border bg-card p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-base font-semibold tracking-[-0.02em]">Draft editor</h2>
           <p className="text-xs text-muted-foreground">Current published version: {version}.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={save} disabled={pending}>
+          <Button type="submit" name="intent" value="save" variant="outline" disabled={pending}>
             Save draft
           </Button>
-          <Button onClick={publish} disabled={pending}>
+          <Button type="submit" name="intent" value="publish" disabled={pending}>
             Publish
           </Button>
         </div>
@@ -94,6 +84,6 @@ export function PageEditor({
           onChange={(event) => setForm((value) => ({ ...value, bodyMarkdown: event.target.value }))}
         />
       </div>
-    </div>
+    </form>
   )
 }

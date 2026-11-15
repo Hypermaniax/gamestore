@@ -19,14 +19,6 @@ export function findByHash(tokenHash: string): Promise<EmailToken | null> {
   return prisma.emailToken.findUnique({ where: { tokenHash } })
 }
 
-/** Atomic data-level operation: consume the token row + flip users.email_terverifikasi. */
-export function consumeVerification(tokenId: bigint, userId: bigint, at: Date): Promise<unknown> {
-  return prisma.$transaction([
-    prisma.emailToken.update({ where: { id: tokenId }, data: { usedAt: at } }),
-    prisma.user.update({ where: { id: userId }, data: { emailVerified: true } }),
-  ])
-}
-
 /**
  * Reset password is a single logical write: spend the token, replace the hash,
  * bump token_version (kills every access token) and revoke all refresh tokens.

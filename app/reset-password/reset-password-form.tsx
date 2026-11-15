@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState } from 'react'
 import Link from 'next/link'
 import { AuthShell } from '@/components/auth-shell'
-import { resetPasswordAction } from '@/src/controllers/auth.controller'
-import { resetPasswordSchema } from '@/src/validation/auth'
+import {
+  resetPasswordFormAction,
+  type ResetPasswordFormState,
+} from '@/src/controllers/auth.controller'
 
 const ERROR_COPY: Record<string, string> = {
   INPUT_INVALID: 'Password must be at least 8 characters.',
@@ -13,34 +15,12 @@ const ERROR_COPY: Record<string, string> = {
   TOO_MANY_REQUESTS: 'Too many attempts. Please try again later.',
 }
 
+const initialState: ResetPasswordFormState = { ok: false, error: null }
+
 export function ResetPasswordForm({ token }: { token: string }) {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [sukses, setSukses] = useState(false)
-
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const password = String(formData.get('password') ?? '')
-    const konfirmasi = String(formData.get('konfirmasi') ?? '')
-    if (password !== konfirmasi) {
-      setError('Passwords do not match.')
-      return
-    }
-    const parsed = resetPasswordSchema.safeParse({ token, password })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
-      return
-    }
-
-    startTransition(async () => {
-      const result = await resetPasswordAction(parsed.data)
-      if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? result.message)
-        return
-      }
-      setSukses(true)
-    })
-  }
+  const [state, formAction, pending] = useActionState(resetPasswordFormAction, initialState)
+  const error = state.error ? (ERROR_COPY[state.code ?? ''] ?? state.error) : null
+  const sukses = state.ok
 
   return (
     <AuthShell>
@@ -72,7 +52,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
           </Link>
         </div>
       ) : (
-        <form noValidate action={handleSubmit}>
+        <form noValidate action={formAction}>
+          <input type="hidden" name="token" value={token} />
           <p className="mt-2 text-sm text-muted-foreground">
             Create a new password — at least 8 characters.
           </p>

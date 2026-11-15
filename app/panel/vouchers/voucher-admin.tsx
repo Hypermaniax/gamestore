@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Banknote,
@@ -282,6 +282,53 @@ export function VoucherAdmin({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [query, setQuery] = useState(initialQuery)
+  const [formErrorDismissed, setFormErrorDismissed] = useState(true)
+  const [formState, formAction, formPending] = useActionState<
+    { error: string | null },
+    FormData
+  >(
+    async () => {
+      const nextErrors = validateForm(form)
+      setFieldErrors(nextErrors)
+      if (Object.keys(nextErrors).length > 0) {
+        return { error: 'Check the highlighted fields before saving this voucher.' }
+      }
+
+      const common = {
+        code: form.code,
+        type: form.type,
+        value: form.value,
+        quota: Number(form.quota),
+        validUntil: toIso(form.validUntil),
+        active: form.active,
+      }
+
+      setError(null)
+      const result = editingId
+        ? await updateVoucherAction({
+            id: editingId,
+            ...common,
+            minPurchase: form.minPurchase || null,
+            maxDiscount: form.maxDiscount || null,
+          })
+        : await createVoucherAction({
+            ...common,
+            minPurchase: form.minPurchase || undefined,
+            maxDiscount: form.maxDiscount || undefined,
+          })
+      if (!result.ok) return { error: result.message ?? 'Action failed.' }
+
+      setNotice(`Voucher ${form.code} ${editingId ? 'updated' : 'created'}.`)
+      setForm(emptyVoucherWithDefaultDate(Date.now()))
+      setFieldErrors({})
+      setEditingId(null)
+      setComposerOpen(false)
+      router.refresh()
+      return { error: null }
+    },
+    { error: null },
+  )
+  const formError = formState.error && !formErrorDismissed ? formState.error : null
 
   const isEditing = editingId !== null
   const expiresSoon =
@@ -337,6 +384,7 @@ export function VoucherAdmin({
     setError(null)
     setNotice(null)
     setFieldErrors({})
+    setFormErrorDismissed(true)
     setEditingId(null)
     setForm(emptyVoucherWithDefaultDate(Date.now()))
     setComposerOpen(true)
@@ -346,6 +394,7 @@ export function VoucherAdmin({
     setError(null)
     setNotice(null)
     setFieldErrors({})
+    setFormErrorDismissed(true)
     setEditingId(voucher.id)
     setForm({
       code: voucher.code,
@@ -361,18 +410,20 @@ export function VoucherAdmin({
   }
 
   function closeComposer() {
-    if (pending) return
+    if (pending || formPending) return
     setComposerOpen(false)
     setForm(emptyVoucherWithDefaultDate(Date.now()))
     setFieldErrors({})
     setEditingId(null)
     setError(null)
+    setFormErrorDismissed(true)
   }
 
   function clearForm() {
     setForm(emptyVoucherWithDefaultDate(Date.now()))
     setFieldErrors({})
     setError(null)
+    setFormErrorDismissed(true)
   }
 
   function handleOpenChange(open: boolean) {
@@ -381,52 +432,6 @@ export function VoucherAdmin({
       return
     }
     closeComposer()
-  }
-
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const nextErrors = validateForm(form)
-    setFieldErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) {
-      setError('Check the highlighted fields before saving this voucher.')
-      return
-    }
-
-    const common = {
-      code: form.code,
-      type: form.type,
-      value: form.value,
-      quota: Number(form.quota),
-      validUntil: toIso(form.validUntil),
-      active: form.active,
-    }
-
-    setError(null)
-    if (editingId) {
-      run(
-        () =>
-          updateVoucherAction({
-            id: editingId,
-            ...common,
-            minPurchase: form.minPurchase || null,
-            maxDiscount: form.maxDiscount || null,
-          }),
-        `Voucher ${form.code} updated.`,
-        { reset: true },
-      )
-      return
-    }
-
-    run(
-      () =>
-        createVoucherAction({
-          ...common,
-          minPurchase: form.minPurchase || undefined,
-          maxDiscount: form.maxDiscount || undefined,
-        }),
-      `Voucher ${form.code} created.`,
-      { reset: true },
-    )
   }
 
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {
@@ -502,7 +507,7 @@ export function VoucherAdmin({
               variant="ghost"
               size="icon-sm"
               onClick={closeComposer}
-              disabled={pending}
+              disabled={pending || formPending}
               aria-label="Close voucher form"
               className="shrink-0"
             >
@@ -512,18 +517,19 @@ export function VoucherAdmin({
 
           <form
             id="voucher-form"
-            onSubmit={submit}
+            action={formAction}
+            onSubmit={() => setFormErrorDismissed(false)}
             className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_22rem]"
             noValidate
           >
             <div className="min-w-0 space-y-6 p-5 sm:p-6">
-              {error ? (
+              {(error ?? formError) ? (
                 <div
                   role="alert"
                   className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive"
                 >
                   <CircleAlert className="mt-0.5 size-4 shrink-0" />
-                  <p>{error}</p>
+                  <p>{error ?? formError}</p>
                 </div>
               ) : null}
               <div className="space-y-4">
@@ -800,17 +806,17 @@ export function VoucherAdmin({
               type="button"
               variant="ghost"
               onClick={isEditing ? closeComposer : clearForm}
-              disabled={pending}
+              disabled={pending || formPending}
             >
               {isEditing ? 'Discard changes' : 'Clear form'}
             </Button>
             <Button
               type="submit"
               form="voucher-form"
-              disabled={pending}
+              disabled={formPending}
               className="h-10 bg-brand text-brand-ink hover:bg-brand/85"
             >
-              {pending ? (
+              {formPending ? (
                 <LoaderCircle className="size-4 animate-spin" />
               ) : isEditing ? (
                 <Check className="size-4" />

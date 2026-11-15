@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import Link from 'next/link'
 import { Mail } from 'lucide-react'
 import { requestEmailChangeAction } from '@/src/controllers/auth.controller'
@@ -17,36 +17,33 @@ const ERROR_COPY: Record<string, string> = {
 }
 
 export function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [terkirim, setTerkirim] = useState(false)
+  const [state, formAction, pending] = useActionState<{ error: string | null }, FormData>(
+    async (_prevState, formData) => {
+      const newEmail = String(formData.get('emailBaru') ?? '')
+      const konfirmasi = String(formData.get('konfirmasiEmail') ?? '')
+      const password = String(formData.get('password') ?? '')
 
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const newEmail = String(formData.get('emailBaru') ?? '')
-    const konfirmasi = String(formData.get('konfirmasiEmail') ?? '')
-    const password = String(formData.get('password') ?? '')
+      if (newEmail.trim().toLowerCase() !== konfirmasi.trim().toLowerCase()) {
+        return { error: 'New email confirmation does not match.' }
+      }
 
-    if (newEmail.trim().toLowerCase() !== konfirmasi.trim().toLowerCase()) {
-      setError('New email confirmation does not match.')
-      return
-    }
+      const parsed = requestEmailChangeSchema.safeParse({ newEmail, password })
+      if (!parsed.success) {
+        return { error: parsed.error.issues[0]?.message ?? 'Invalid data.' }
+      }
 
-    const parsed = requestEmailChangeSchema.safeParse({ newEmail, password })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
-      return
-    }
-
-    startTransition(async () => {
       const result = await requestEmailChangeAction(parsed.data)
       if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? result.message)
-        return
+        return { error: ERROR_COPY[result.code] ?? result.message }
       }
+
       setTerkirim(true)
-    })
-  }
+      return { error: null }
+    },
+    { error: null },
+  )
+  const error = state.error
 
   return (
     <section
@@ -108,7 +105,7 @@ export function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
             </div>
           </div>
         ) : (
-          <form noValidate action={handleSubmit} className="space-y-4">
+          <form noValidate action={formAction} className="space-y-4">
             <div>
               <label htmlFor="email-baru" className="text-xs font-bold">
                 New email

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,6 +38,31 @@ export function TransactionActions({
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [refund, setRefund] = useState({ paymentId: '', amount: '', fee: '0', ref: '', note: '' })
+  const [refundState, refundFormAction, refundPending] = useActionState<
+    { error: string | null; notice: string | null },
+    FormData
+  >(
+    async () => {
+      if (!refund.paymentId) {
+        return { error: 'Select a payment to refund.', notice: null }
+      }
+      const result = await completeRefundAction({
+        code: code,
+        paymentId: refund.paymentId,
+        amount: refund.amount,
+        fee: refund.fee || '0',
+        ref: refund.ref || undefined,
+        note: refund.note || undefined,
+      })
+      if (!result.ok) {
+        return { error: result.message ?? 'Action failed.', notice: null }
+      }
+      setRefund({ paymentId: '', amount: '', fee: '0', ref: '', note: '' })
+      router.refresh()
+      return { error: null, notice: 'Refund recorded.' }
+    },
+    { error: null, notice: null },
+  )
   const refundable = payments.filter(
     (payment) => ['PAID', 'DUPLIKAT'].includes(payment.status) && BigInt(payment.sisaRefund) > 0,
   )
@@ -110,28 +135,7 @@ export function TransactionActions({
       {notice ? <p className="rounded-lg bg-brand/15 px-3 py-2 text-sm">{notice}</p> : null}
 
       {refundable.length > 0 ? (
-        <form
-          className="space-y-3 border-t pt-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!refund.paymentId) {
-              setError('Select a payment to refund.')
-              return
-            }
-            run(
-              () =>
-                completeRefundAction({
-                  code: code,
-                  paymentId: refund.paymentId,
-                  amount: refund.amount,
-                  fee: refund.fee || '0',
-                  ref: refund.ref || undefined,
-                  note: refund.note || undefined,
-                }),
-              'Refund recorded.',
-            )
-          }}
-        >
+        <form className="space-y-3 border-t pt-4" action={refundFormAction}>
           <div>
             <p className="text-sm font-semibold">Record refund</p>
             <p className="text-xs text-muted-foreground">
@@ -198,7 +202,15 @@ export function TransactionActions({
               onChange={(event) => setRefund((value) => ({ ...value, note: event.target.value }))}
             />
           </div>
-          <Button type="submit" disabled={pending}>
+          {refundState.error ? (
+            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {refundState.error}
+            </p>
+          ) : null}
+          {refundState.notice ? (
+            <p className="rounded-lg bg-brand/15 px-3 py-2 text-sm">{refundState.notice}</p>
+          ) : null}
+          <Button type="submit" disabled={refundPending}>
             Save refund
           </Button>
         </form>

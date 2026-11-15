@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, type ReactNode } from 'react'
+import { useActionState, useState, useTransition, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -403,6 +403,34 @@ export function PromotionAdmin({
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({})
   const [editor, setEditor] = useState<PromotionEditor | null>(null)
   const [query, setQuery] = useState(initialQuery)
+  const [formErrorDismissed, setFormErrorDismissed] = useState(true)
+  const [formState, formAction, formPending] = useActionState<
+    { error: string | null },
+    FormData
+  >(
+    async () => {
+      if (!editor) return { error: null }
+      const nextErrors = validateForm(editor.form)
+      setFieldErrors(nextErrors)
+      if (Object.keys(nextErrors).length > 0) {
+        return { error: 'Check the highlighted fields before saving this promotion.' }
+      }
+
+      const payload = buildPayload(editor.form)
+      const result =
+        editor.mode === 'edit' && editor.id
+          ? await updatePromotionAction({ id: editor.id, ...payload })
+          : await createPromotionAction(payload)
+      if (!result.ok) return { error: result.message ?? 'Action failed.' }
+
+      setNotice(`Promotion “${payload.name}” ${editor.mode === 'edit' ? 'updated' : 'created'}.`)
+      setEditor(null)
+      router.refresh()
+      return { error: null }
+    },
+    { error: null },
+  )
+  const formError = formState.error && !formErrorDismissed ? formState.error : null
 
   const isEditing = editor?.mode === 'edit'
   const hasFilters = Boolean(initialQuery || initialActive)
@@ -430,6 +458,7 @@ export function PromotionAdmin({
     setError(null)
     setNotice(null)
     setFieldErrors({})
+    setFormErrorDismissed(true)
     setEditor({ mode: 'create', targetLabel: null, form: emptyPromotion(Date.now()) })
   }
 
@@ -437,6 +466,7 @@ export function PromotionAdmin({
     setError(null)
     setNotice(null)
     setFieldErrors({})
+    setFormErrorDismissed(true)
     setEditor({
       mode: 'edit',
       id: promotion.id,
@@ -456,10 +486,11 @@ export function PromotionAdmin({
   }
 
   function closeEditor() {
-    if (pending) return
+    if (pending || formPending) return
     setEditor(null)
     setFieldErrors({})
     setError(null)
+    setFormErrorDismissed(true)
   }
 
   function updateField<K extends keyof PromotionForm>(key: K, value: PromotionForm[K]) {
@@ -516,33 +547,6 @@ export function PromotionAdmin({
         : current,
     )
     setFieldErrors((current) => ({ ...current, targetId: undefined }))
-  }
-
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!editor) return
-    const nextErrors = validateForm(editor.form)
-    setFieldErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) {
-      setError('Check the highlighted fields before saving this promotion.')
-      return
-    }
-
-    const payload = buildPayload(editor.form)
-    if (editor.mode === 'edit' && editor.id) {
-      run(
-        () => updatePromotionAction({ id: editor.id!, ...payload }),
-        `Promotion “${payload.name}” updated.`,
-        { close: true },
-      )
-      return
-    }
-
-    run(
-      () => createPromotionAction(payload),
-      `Promotion “${payload.name}” created.`,
-      { close: true },
-    )
   }
 
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {
@@ -677,7 +681,7 @@ export function PromotionAdmin({
               variant="ghost"
               size="icon-sm"
               onClick={closeEditor}
-              disabled={pending}
+              disabled={pending || formPending}
               aria-label="Close promotion form"
               className="shrink-0"
             >
@@ -687,18 +691,19 @@ export function PromotionAdmin({
 
           <form
             id="promotion-form"
-            onSubmit={submit}
+            action={formAction}
+            onSubmit={() => setFormErrorDismissed(false)}
             className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_22rem]"
             noValidate
           >
             <div className="min-w-0 space-y-6 p-5 sm:p-6">
-              {error ? (
+              {(error ?? formError) ? (
                 <div
                   role="alert"
                   className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive"
                 >
                   <CircleAlert className="mt-0.5 size-4 shrink-0" />
-                  <p>{error}</p>
+                  <p>{error ?? formError}</p>
                 </div>
               ) : null}
 
@@ -1041,17 +1046,17 @@ export function PromotionAdmin({
               type="button"
               variant="ghost"
               onClick={closeEditor}
-              disabled={pending}
+              disabled={pending || formPending}
             >
               {isEditing ? 'Discard changes' : 'Cancel'}
             </Button>
             <Button
               type="submit"
               form="promotion-form"
-              disabled={pending}
+              disabled={formPending}
               className="h-10 bg-brand text-brand-ink hover:bg-brand/85"
             >
-              {pending ? (
+              {formPending ? (
                 <LoaderCircle className="size-4 animate-spin" />
               ) : isEditing ? (
                 <Check className="size-4" />

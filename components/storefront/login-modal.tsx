@@ -3,12 +3,16 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowLeft, CheckCircle2 } from 'lucide-react'
-import { loginAction, requestPasswordResetAction } from '@/src/controllers/auth.controller'
-import { loginSchema, requestPasswordResetSchema } from '@/src/validation/auth'
+import {
+  loginFormAction,
+  requestPasswordResetFormAction,
+  type LoginFormState,
+  type RequestPasswordResetFormState,
+} from '@/src/controllers/auth.controller'
 import { TotpLoginForm } from '@/components/totp-login-form'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -30,19 +34,50 @@ export function LoginModal() {
   const router = useRouter()
   const pathname = usePathname()
   const [mode, setMode] = useState<Mode>('masuk')
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [totpChallenge, setTotpChallenge] = useState<string | null>(null)
-  const [resetPending, startReset] = useTransition()
-  const [resetError, setResetError] = useState<string | null>(null)
-  const [resetSent, setResetSent] = useState(false)
+  const [loginErrorDismissed, setLoginErrorDismissed] = useState(true)
+  const [forgotDismissed, setForgotDismissed] = useState(true)
+  const [loginState, loginFormActionState, pending] = useActionState<LoginFormState, FormData>(
+    async (prevState, formData) => {
+      const result = await loginFormAction(prevState, formData)
+      if (result.challengeToken) {
+        setTotpChallenge(result.challengeToken)
+        return result
+      }
+      if (result.redirectTo) {
+        if (result.redirectTo.startsWith('/totp/setup')) {
+          close()
+          router.push(result.redirectTo)
+          return result
+        }
+        if (result.peran && result.username) {
+          completeLogin({
+            peran: result.peran,
+            username: result.username,
+            emailVerified: result.emailVerified ?? false,
+          })
+        }
+      }
+      return result
+    },
+    { error: null },
+  )
+  const [forgotState, forgotFormAction, resetPending] = useActionState<
+    RequestPasswordResetFormState,
+    FormData
+  >(requestPasswordResetFormAction, { ok: false, error: null })
+  const error =
+    loginState.error && !loginErrorDismissed
+      ? (ERROR_COPY[loginState.code ?? ''] ?? 'Something went wrong. Try again.')
+      : null
+  const resetError = forgotState.error && !forgotDismissed ? forgotState.error : null
+  const resetSent = forgotState.ok && !forgotDismissed
 
   function resetState() {
     setMode('masuk')
-    setError(null)
     setTotpChallenge(null)
-    setResetError(null)
-    setResetSent(false)
+    setLoginErrorDismissed(true)
+    setForgotDismissed(true)
   }
 
   function close() {
@@ -52,47 +87,13 @@ export function LoginModal() {
 
   function openForgot() {
     setMode('lupa')
-    setError(null)
-    setResetError(null)
-    setResetSent(false)
+    setLoginErrorDismissed(true)
+    setForgotDismissed(true)
   }
 
   function backToLogin() {
     setMode('masuk')
-    setResetError(null)
-    setResetSent(false)
-  }
-
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const parsed = loginSchema.safeParse({
-      usernameOrEmail: String(formData.get('identity') ?? ''),
-      password: String(formData.get('password') ?? ''),
-    })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
-      return
-    }
-
-    startTransition(async () => {
-      const result = await loginAction(parsed.data)
-
-      if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? 'Something went wrong. Try again.')
-        return
-      }
-      if (result.jalur === 'perlu-totp') {
-        setTotpChallenge(result.token)
-        return
-      }
-      if (result.jalur === 'perlu-setup-totp') {
-        close()
-        router.push(`/totp/setup?token=${encodeURIComponent(result.token)}`)
-        return
-      }
-
-      completeLogin(result)
-    })
+    setForgotDismissed(true)
   }
 
   function completeLogin(result: {
@@ -116,26 +117,6 @@ export function LoginModal() {
     notify(`Welcome, ${result.username}`)
   }
 
-  function handleForgotSubmit(formData: FormData) {
-    setResetError(null)
-    const parsed = requestPasswordResetSchema.safeParse({
-      email: String(formData.get('email') ?? ''),
-    })
-    if (!parsed.success) {
-      setResetError(parsed.error.issues[0]?.message ?? 'Invalid email.')
-      return
-    }
-
-    startReset(async () => {
-      const result = await requestPasswordResetAction(parsed.data)
-      if (!result.ok) {
-        setResetError(result.message)
-        return
-      }
-      setResetSent(true)
-    })
-  }
-
   return (
     <Dialog open={loginOpen} onOpenChange={(open) => !open && close()}>
       <DialogContent
@@ -149,14 +130,14 @@ export function LoginModal() {
             onSuccess={(result) => completeLogin(result)}
             onBack={() => {
               setTotpChallenge(null)
-              setError(null)
             }}
           />
         </div>
       ) : (
         <form
           noValidate
-          action={handleSubmit}
+          action={loginFormActionState}
+          onSubmit={() => setLoginErrorDismissed(false)}
         >
           <div className="mb-7">
             <p className="text-xs font-bold uppercase tracking-[.18em] text-brand-deep">
@@ -228,7 +209,11 @@ export function LoginModal() {
           </p>
         </form>
       ) : (
-        <form noValidate action={handleForgotSubmit}>
+        <form
+          noValidate
+          action={forgotFormAction}
+          onSubmit={() => setForgotDismissed(false)}
+        >
           <div className="mb-7">
             <p className="text-xs font-bold uppercase tracking-[.18em] text-brand-deep">
               Recovery

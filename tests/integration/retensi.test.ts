@@ -85,6 +85,20 @@ describe('RetensiJob', () => {
       ],
     })
 
+    await prisma.emailOtp.createMany({
+      data: [
+        { userId: user.id, purpose: 'VERIFY_EMAIL', codeHash: 'o1', expiresAt: ago(40) },
+        {
+          userId: user.id,
+          purpose: 'VERIFY_EMAIL',
+          codeHash: 'o2',
+          expiresAt: ago(40),
+          consumedAt: ago(35),
+        },
+        { userId: user.id, purpose: 'VERIFY_EMAIL', codeHash: 'o3', expiresAt: later(10) },
+      ],
+    })
+
     const result = await retensiJob()
     expect(result.ok).toBe(true)
 
@@ -109,5 +123,6 @@ describe('RetensiJob', () => {
     expect(await prisma.refreshToken.count({ where: { familyId: familyLama } })).toBe(0)
     expect(await prisma.refreshToken.count({ where: { familyId: familyAktif } })).toBe(1)
     expect(await prisma.emailToken.count()).toBe(2)
+    expect(await prisma.emailOtp.count()).toBe(1)
   })
 })

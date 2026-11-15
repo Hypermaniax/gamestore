@@ -1,7 +1,7 @@
 # 🗂 ERD — Toko Online Akun Game (v11)
 
 > Entity Relationship Diagram untuk skema database (PLAN.md §6, v10).
-> **29 tabel**: MVP = 27 🟢 · Fase 2 = 2 (ditandai 🔵).
+> **30 tabel**: MVP = 28 🟢 · Fase 2 = 2 (ditandai 🔵).
 > **Kebijakan soft delete (v8)**: rekord bisnis tidak pernah dihapus fisik — penanda
 > `deleted_at` / flip `status` / flip `active` (tabel master) / `revoked_at`;
 > **pengecualian: tabel audit** (`admin_audit_logs`, `audit_reveals`) dan `static_page_versions`
@@ -383,11 +383,21 @@ erDiagram
     email_tokens {
         bigint id PK
         bigint user_id FK
-        varchar type "VERIFIKASI|RESET|GANTI_EMAIL_LAMA|GANTI_EMAIL_BARU"
+        varchar type "RESET|GANTI_EMAIL_LAMA|GANTI_EMAIL_BARU"
         varchar new_email "NULL kecuali ganti email"
         varchar token_hash "bukan plaintext"
         timestamptz valid_until
         timestamptz used_at "sekali pakai"
+    }
+    email_otps {
+        bigint id PK
+        bigint user_id FK
+        varchar purpose "VERIFY_EMAIL"
+        varchar code_hash "HMAC-SHA256, bukan plaintext"
+        timestamptz expires_at
+        int attempts "maks 5"
+        timestamptz consumed_at "sekali pakai"
+        timestamptz created_at
     }
     admin_audit_logs {
         bigint id PK
@@ -486,7 +496,7 @@ erDiagram
 | Transaksi | `idempotency_keys` | users, transactions | N:1; PK (user_id, key) |
 | Transaksi | `audit_reveals` | transactions, users | N:1 |
 | Transaksi | `refunds` | payments, transactions, users(admin) | N:1 masing-masing; satu payments boleh >1 refunds |
-| Sistem | `email_tokens`, `refresh_tokens`, `totp_recoveries`, `admin_audit_logs` | users | N:1 |
+| Sistem | `email_tokens`, `email_otps`, `refresh_tokens`, `totp_recoveries`, `admin_audit_logs` | users | N:1 |
 | Sistem | `settings` | users (updated_by) | key-value, tanpa relasi lain |
 | Sistem | `static_page_versions` | static_pages, users (published_by) | N:1; PK (page_id, version); append-only |
 | Fase 2 🔵 | `complaints` | transactions, users | N:1 |

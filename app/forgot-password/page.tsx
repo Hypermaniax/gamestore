@@ -1,35 +1,22 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState } from 'react'
 import Link from 'next/link'
 import { AuthShell } from '@/components/auth-shell'
-import { requestPasswordResetAction } from '@/src/controllers/auth.controller'
-import { requestPasswordResetSchema } from '@/src/validation/auth'
+import {
+  requestPasswordResetFormAction,
+  type RequestPasswordResetFormState,
+} from '@/src/controllers/auth.controller'
+
+const initialState: RequestPasswordResetFormState = { ok: false, error: null }
 
 export default function LupaPasswordPage() {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [terkirim, setTerkirim] = useState(false)
-
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const parsed = requestPasswordResetSchema.safeParse({
-      email: String(formData.get('email') ?? ''),
-    })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
-      return
-    }
-
-    startTransition(async () => {
-      const result = await requestPasswordResetAction(parsed.data)
-      if (!result.ok) {
-        setError(result.message)
-        return
-      }
-      setTerkirim(true)
-    })
-  }
+  const [state, formAction, pending] = useActionState(
+    requestPasswordResetFormAction,
+    initialState,
+  )
+  const error = state.error
+  const terkirim = state.ok
 
   return (
     <AuthShell>
@@ -50,7 +37,7 @@ export default function LupaPasswordPage() {
           </Link>
         </div>
       ) : (
-        <form noValidate action={handleSubmit}>
+        <form noValidate action={formAction}>
           <p className="mt-2 text-sm text-muted-foreground">
             Enter your account email. We&apos;ll send a link to create a new password.
           </p>

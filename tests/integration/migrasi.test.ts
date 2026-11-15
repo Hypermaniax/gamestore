@@ -17,11 +17,11 @@ describe('migrasi dari nol', () => {
       WHERE schemaname = 'public'
         AND tablename IN (
           'users', 'roles', 'menus', 'permissions', 'role_menus', 'role_permissions',
-          'email_tokens', 'refresh_tokens', 'totp_recoveries',
+          'email_tokens', 'email_otps', 'refresh_tokens', 'totp_recoveries',
           'promotions', 'vouchers', 'voucher_usages', 'transactions', 'payments', 'refunds', 'webhook_events', 'idempotency_keys', 'game_types', 'games', 'game_accounts', 'account_photos',
           'themes', 'static_pages', 'static_page_versions', 'admin_audit_logs', 'audit_reveals', 'settings'
         )
     `
-    expect(Number(tabel[0]?.amount ?? 0)).toBe(27)
+    expect(Number(tabel[0]?.amount ?? 0)).toBe(28)
   })
 })

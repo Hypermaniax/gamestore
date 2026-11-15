@@ -53,6 +53,7 @@ model User {
   auditReveals    AuditReveal[]
   adminAuditLogs  AdminAuditLog[]     @relation("Actor")
   emailTokens     EmailToken[]
+  emailOtps       EmailOtp[]
   refreshTokens   RefreshToken[]
   totpRecoveries  TotpRecovery[]
   pagesPublished  StaticPageVersion[] @relation("Publisher")
@@ -444,6 +445,23 @@ model EmailToken {
   @@unique([tokenHash])
   @@index([userId])
   @@map("email_tokens")
+}
+
+model EmailOtp {
+  id         BigInt    @id @default(autoincrement())
+  userId     BigInt    @map("user_id")
+  purpose    String    @db.VarChar(30)
+  codeHash   String    @map("code_hash") @db.VarChar(64)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  attempts   Int       @default(0)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("email_otps")
 }
 
 model AdminAuditLog {

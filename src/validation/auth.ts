@@ -24,7 +24,13 @@ export const loginSchema = z.object({
   device: z.string().max(150).optional(),
 })
 
-export const verificationTokenSchema = tokenSchema
+export const verifyEmailSchema = z.object({
+  email: emailSchema.optional(),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Verification code must be 6 digits.'),
+})
 
 export const requestPasswordResetSchema = z.object({
   email: emailSchema,
@@ -57,6 +63,7 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
 export type RequestEmailChangeInput = z.infer<typeof requestEmailChangeSchema>
 export type ConfirmEmailChangeInput = z.infer<typeof confirmEmailChangeSchema>
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>
 
 /* ------------------------------------------------------------------ TOTP */
 

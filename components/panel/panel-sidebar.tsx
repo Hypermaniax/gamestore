@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
+import { useActionState, useState } from 'react'
 import {
   FileText,
   Gamepad2,
@@ -98,6 +98,14 @@ function Brand() {
 }
 
 function SidebarFooter() {
+  const router = useRouter()
+  const [, formAction, pending] = useActionState<null, FormData>(async () => {
+    await logoutAction()
+    router.replace('/login')
+    router.refresh()
+    return null
+  }, null)
+
   return (
     <div className="border-t border-sidebar-border p-3">
       <Link
@@ -107,13 +115,14 @@ function SidebarFooter() {
         <Sparkles className="size-4" />
         View store
       </Link>
-      <form action={logoutAction}>
+      <form action={formAction}>
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 px-3 text-muted-foreground hover:text-foreground"
           type="submit"
+          disabled={pending}
         >
-          Log out
+          {pending ? 'Logging out…' : 'Log out'}
         </Button>
       </form>
     </div>

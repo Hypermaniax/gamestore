@@ -1,6 +1,7 @@
 // Account & security page — profile summary, password change, and logout-all.
 // Server component only reads the safe profile shape from authService.
 
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Mail, ShieldCheck, UserRound } from 'lucide-react'
 import { TotpActiveCard } from '@/components/totp-active'
@@ -54,6 +55,14 @@ export default async function AccountPage() {
                 <ShieldCheck className="size-3.5" />
                 {profile.emailVerified ? 'Email verified' : 'Email not verified'}
               </span>
+              {!profile.emailVerified && (
+                <Link
+                  href="/verify-email"
+                  className="mt-2 block text-right text-xs font-bold text-brand-deep underline-offset-4 hover:underline"
+                >
+                  Verify email
+                </Link>
+              )}
             </div>
           </div>
 

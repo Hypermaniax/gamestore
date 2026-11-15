@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateSettingAction } from '@/src/controllers/transaction.controller'
+
+type SettingsState = { error: string | null; notice: string | null }
 
 export function SettingsForm({
   namaToko,
@@ -19,28 +21,22 @@ export function SettingsForm({
   checkoutAktif: boolean
 }) {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
   const [form, setForm] = useState({ namaToko, kontakCs, pesanPengumuman, checkoutAktif })
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [state, formAction, pending] = useActionState<SettingsState, FormData>(
+    async () => {
+      const result = await updateSettingAction(form)
+      if (!result.ok) return { error: result.message, notice: null }
+      router.refresh()
+      return { error: null, notice: 'Settings saved.' }
+    },
+    { error: null, notice: null },
+  )
+  const { error, notice } = state
 
   return (
     <form
+      action={formAction}
       className="max-w-2xl space-y-5 rounded-xl border bg-card p-4"
-      onSubmit={(event) => {
-        event.preventDefault()
-        setError(null)
-        setNotice(null)
-        startTransition(async () => {
-          const result = await updateSettingAction(form)
-          if (!result.ok) {
-            setError(result.message)
-            return
-          }
-          setNotice('Settings saved.')
-          router.refresh()
-        })
-      }}
     >
       <div className="space-y-1.5">
         <Label htmlFor="namaToko">Store name</Label>

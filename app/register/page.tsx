@@ -2,39 +2,17 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState } from 'react'
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
-import { registerAction } from '@/src/controllers/auth.controller'
-import { registerSchema } from '@/src/validation/auth'
+import { registerFormAction, type RegisterFormState } from '@/src/controllers/auth.controller'
 import { ThemeToggle } from '@/components/theme-toggle'
 
+const initialState: RegisterFormState = { error: null }
+
 export default function DaftarForm() {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [sukses, setSukses] = useState(false)
-
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const parsed = registerSchema.safeParse({
-      username: String(formData.get('username') ?? ''),
-      email: String(formData.get('email') ?? ''),
-      password: String(formData.get('password') ?? ''),
-    })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
-      return
-    }
-
-    startTransition(async () => {
-      const result = await registerAction(parsed.data)
-      if (!result.ok) {
-        setError(result.message)
-        return
-      }
-      setSukses(true)
-    })
-  }
+  const [state, formAction, pending] = useActionState(registerFormAction, initialState)
+  const error = state.error
 
   return (
     <main className="relative flex min-h-screen flex-1 items-center justify-center overflow-hidden p-6">
@@ -55,7 +33,7 @@ export default function DaftarForm() {
 
       <form
         noValidate
-        action={handleSubmit}
+        action={formAction}
         className="relative z-10 w-full max-w-md rounded-[28px] border border-border bg-popover p-8 shadow-[0_30px_100px_rgba(0,0,0,.35)] sm:p-10"
       >
         <p className="text-xs font-bold uppercase tracking-[.18em] text-brand-deep">New account</p>
@@ -64,78 +42,60 @@ export default function DaftarForm() {
           Create a buyer account — your email will be verified.
         </p>
 
-        {sukses ? (
-          <div className="mt-7 space-y-2">
-            <p className="text-sm font-semibold">Registration successful.</p>
-            <p className="text-sm text-muted-foreground">
-              Check your email for the verification link. In development, the link appears in the
-              server log.
-            </p>
-            <Link
-              href="/"
-              className="mt-2 inline-block text-sm font-bold text-brand-deep underline-offset-4 hover:underline"
-            >
-              Back to home
-            </Link>
-          </div>
-        ) : (
-          <>
-            <label htmlFor="username" className="mt-7 block text-xs font-bold">
-              Username
-            </label>
-            <input
-              id="username"
-              name="username"
-              autoComplete="username"
-              disabled={pending}
-              aria-invalid={!!error}
-              className="field mt-2"
-              placeholder="your username"
-            />
+        <label htmlFor="username" className="mt-7 block text-xs font-bold">
+          Username
+        </label>
+        <input
+          id="username"
+          name="username"
+          autoComplete="username"
+          disabled={pending}
+          aria-invalid={!!error}
+          className="field mt-2"
+          placeholder="your username"
+        />
 
-            <label htmlFor="email" className="mt-5 block text-xs font-bold">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              disabled={pending}
-              aria-invalid={!!error}
-              className="field mt-2"
-              placeholder="name@email.com"
-            />
+        <label htmlFor="email" className="mt-5 block text-xs font-bold">
+          Email
+        </label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          disabled={pending}
+          aria-invalid={!!error}
+          className="field mt-2"
+          placeholder="name@email.com"
+        />
 
-            <label htmlFor="password" className="mt-5 block text-xs font-bold">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              disabled={pending}
-              aria-invalid={!!error}
-              className="field mt-2"
-              placeholder="At least 8 characters"
-            />
+        <label htmlFor="password" className="mt-5 block text-xs font-bold">
+          Password
+        </label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          disabled={pending}
+          aria-invalid={!!error}
+          className="field mt-2"
+          placeholder="At least 8 characters"
+        />
 
-            {error && (
-              <p role="alert" className="mt-4 text-xs font-semibold text-destructive">
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={pending}
-              className="mt-6 h-12 w-full rounded-xl bg-brand text-sm font-bold text-brand-ink transition hover:brightness-105 active:scale-[.99] disabled:opacity-60"
-            >
-              {pending ? 'Processing…' : 'Sign up'}
-            </button>
-          </>
+        {error && (
+          <p role="alert" className="mt-4 text-xs font-semibold text-destructive">
+            {error}
+          </p>
         )}
+
+        <button
+          type="submit"
+          disabled={pending}
+          className="mt-6 h-12 w-full rounded-xl bg-brand text-sm font-bold text-brand-ink transition hover:brightness-105 active:scale-[.99] disabled:opacity-60"
+        >
+          {pending ? 'Processing…' : 'Sign up'}
+        </button>
 
         <p className="mt-5 text-center text-xs text-muted-foreground">
           Already have an account?{' '}

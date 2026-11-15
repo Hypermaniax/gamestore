@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useActionState, useMemo, useState, useTransition } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
@@ -120,12 +120,54 @@ export function AccountAdmin({ account, games }: { account: Account; games: Game
   const [pulihkan, setPulihkan] = useState('')
   const [fotoUrl, setFotoUrl] = useState('')
   const [hapusTerbuka, setHapusTerbuka] = useState(false)
-
+  const [saveErrorDismissed, setSaveErrorDismissed] = useState(true)
   const game = games.find((item) => item.id === form.gameId)
   const fields = useMemo(() => parseAttributeSchema(game?.attributeSchema), [game?.attributeSchema])
   const kredensialTerkunci = account.status === 'RESERVED' || account.status === 'SOLD'
   const kredensialSiap = isCredentialComplete(credentials)
   const siapTampil = account.kredensialTerisi && account.photos.length > 0
+
+  const [saveState, saveFormAction, savePending] = useActionState<
+    { error: string | null; notice: string | null },
+    FormData
+  >(
+    async () => {
+      const missing = fields.filter((field) => field.wajib && !attributes[field.kunci]?.trim())
+      const nonNumeric = invalidNumericFields(fields, attributes)
+      const problems: string[] = []
+      if (!form.title.trim()) problems.push('Account title is required.')
+      if (!form.price || form.price === '0') problems.push('Account price must be greater than 0.')
+      if (missing.length > 0) {
+        problems.push(
+          `Complete the required specs: ${missing.map((field) => field.label).join(', ')}.`,
+        )
+      }
+      if (nonNumeric.length > 0) {
+        problems.push(
+          `Enter valid numbers for: ${nonNumeric.map((field) => field.label).join(', ')}.`,
+        )
+      }
+      if (problems.length > 0) {
+        setShowValidation(true)
+        return { error: problems.join(' '), notice: null }
+      }
+
+      const result = await updateAccountAction({
+        id: account.id,
+        gameId: form.gameId,
+        title: form.title,
+        description: form.description || null,
+        price: form.price,
+        attributes: buildAttributeValues(fields, attributes),
+      })
+      if (!result.ok) return { error: result.message ?? 'Action failed.', notice: null }
+
+      router.refresh()
+      return { error: null, notice: 'Account changes saved.' }
+    },
+    { error: null, notice: null },
+  )
+  const saveError = saveState.error && !saveErrorDismissed ? saveState.error : null
 
   function run(task: () => Promise<{ ok: boolean; message?: string }>, message: string, redirect?: string) {
     setError(null)
@@ -208,60 +250,25 @@ export function AccountAdmin({ account, games }: { account: Account; games: Game
 
   return (
     <>
-      {error || notice ? (
+      {error || saveError || notice || saveState.notice ? (
         <div
-          role={error ? 'alert' : 'status'}
+          role={error || saveError ? 'alert' : 'status'}
           className={`mb-5 flex items-start gap-2 rounded-xl border px-3 py-2.5 text-sm ${
-            error
+            error || saveError
               ? 'border-destructive/30 bg-destructive/10 text-destructive'
               : 'border-brand/30 bg-brand/10 text-brand-deep'
           }`}
         >
-          {error ? <AlertCircle className="mt-0.5 size-4 shrink-0" /> : <Check className="mt-0.5 size-4 shrink-0" />}
-          <p>{error ?? notice}</p>
+          {error || saveError ? <AlertCircle className="mt-0.5 size-4 shrink-0" /> : <Check className="mt-0.5 size-4 shrink-0" />}
+          <p>{error ?? saveError ?? notice ?? saveState.notice}</p>
         </div>
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <form
             className="order-1 space-y-5 rounded-2xl border bg-card p-5 sm:p-6 xl:col-start-1 xl:row-start-1"
-            onSubmit={(event) => {
-              event.preventDefault()
-              const missing = fields.filter(
-                (field) => field.wajib && !attributes[field.kunci]?.trim(),
-              )
-              const nonNumeric = invalidNumericFields(fields, attributes)
-              const problems: string[] = []
-              if (!form.title.trim()) problems.push('Account title is required.')
-              if (!form.price || form.price === '0') problems.push('Account price must be greater than 0.')
-              if (missing.length > 0) {
-                problems.push(
-                  `Complete the required specs: ${missing.map((field) => field.label).join(', ')}.`,
-                )
-              }
-              if (nonNumeric.length > 0) {
-                problems.push(
-                  `Enter valid numbers for: ${nonNumeric.map((field) => field.label).join(', ')}.`,
-                )
-              }
-              if (problems.length > 0) {
-                setShowValidation(true)
-                setError(problems.join(' '))
-                return
-              }
-              run(
-                () =>
-                  updateAccountAction({
-                    id: account.id,
-                    gameId: form.gameId,
-                    title: form.title,
-                    description: form.description || null,
-                    price: form.price,
-                    attributes: buildAttributeValues(fields, attributes),
-                  }),
-                'Account changes saved.',
-              )
-            }}
+            action={saveFormAction}
+            onSubmit={() => setSaveErrorDismissed(false)}
           >
             <SectionHeading
               icon={Gamepad2}
@@ -280,6 +287,7 @@ export function AccountAdmin({ account, games }: { account: Account; games: Game
                     setAtribut({})
                     setShowValidation(false)
                     setError(null)
+                    setSaveErrorDismissed(true)
                   }}
                 >
                   <SelectTrigger id="gameId" className="h-10 w-full">
@@ -367,9 +375,9 @@ export function AccountAdmin({ account, games }: { account: Account; games: Game
             </div>
 
             <div className="flex items-center justify-end border-t pt-4">
-              <Button type="submit" disabled={pending}>
-                {pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
-                {pending ? 'Saving...' : 'Save changes'}
+              <Button type="submit" disabled={savePending}>
+                {savePending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
+                {savePending ? 'Saving...' : 'Save changes'}
               </Button>
             </div>
           </form>

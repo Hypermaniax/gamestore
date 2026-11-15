@@ -1,27 +1,29 @@
-# PRODUCT.md
+# PRODUCT.md — NEXAPLAY
 
-## Product
-Toko online jual-beli **akun game** (Mobile Legends, Clash of Clans, Genshin Impact, PUBG, Valorant, dll. lihat seed `jenis_game`/`game`). Pembeli memilih akun, membayar via Xendit, lalu menerima kredensial akun (serah terima + garansi). Ini **bukan marketplace C2C** — toko tunggal yang menampung stok akun sendiri.
+Sumber: ekspor Figma Make `project.zip` (landing page marketplace akun game), diadopsi sebagai arah visual & brand sementara.
 
-- Sumber kebenaran bisnis: `docs/PLAN.md` (v13); kontrak aksi: `docs/API.md` (v10); skema: `docs/ERD.md` (v10).
-- E-commerce terkunci untuk **pembeli** (katalog, checkout, reveal, garansi, refund; status transaksi = state machine ketat).
-- Fitur **Fase 2** yang belum ada: komplain/dispute-penuh, editor tema, invoice kustom, notifikasi push.
+## Brand
 
-## Users
-1. **Pembeli** — orang Indonesia yang membeli akun game. Lupa-tapi-berat: butuh kepercayaan (punya aset uang), cepat, dan cocok HP. Bahasa UI: **Indonesia** (angkaformat `Rp 1.250.000`, tanggal lokal).
-2. **Admin / CS toko** (1 orang, panel `app/panel/*`) — mengelola katalog akun stok, transaksi/reveal, refund, voucher, users & RBAC. Mode antarmukanya **Operate**: kecepatan & konsisten, bukan ekspresi.
+- **Nama**: NEXAPLAY (wordmark: `NEXA` + `PLAY` aksen lime).
+- **Kategori**: marketplace akun game terkurasi.
+- **Janji**: detail akun transparan, pembayaran terverifikasi, garansi hingga 14 hari.
+- **Audiens**: gamer Indonesia 16–30 tahun yang membeli akun siap pakai.
 
-## Platform
-`web`. Next.js full-stack App Router (halaman + Server Actions; satu-satunya HTTP route = webhook Xendit + `/health`). Skala pertumbuhan juga sebuah target: responsif mobile-first dari chunk pertama karena mayoritas pembeli dari HP.
+## Tone
 
-## Stack (terkunci)
-Next 16 + React 19 + Tailwind 4 + shadcn/ui (base-nova, prop `render` bukan `asChild`), Prisma 7 (Postgres native), auth = access JWT cookie httpOnly + refresh rotasi. Backend 3 layer dalam `src/`: controllers → services → repositories.
+- Bahasa Indonesia santai-profesional ("Main lebih jauh", "Season-ready accounts" sebagai aksen Inggris).
+- Jujur: tidak ada angka/sosial-bukti palsu; data demo ditandai dan diganti bertahap.
+- Pendek, tegas, tanpa jargon teknis.
 
-## Consolidation (aksesibilitas & praktik)
-- Semua tindakan tulis lewat Server Actions; error = typed-union `{ ok, kode, pesan }` — frontend memetakan `kode` ke teks Indonesia, **tidak membaca teks mesin**.
-- Nilai nominal = `Rp` ribuan lokal, tanggal `Intl.DateTimeFormat('id-ID')`.
-- Halaman publik responsive; fitur bagian panel min-width umumnya desktop, masih harus tidak hancur di tablet.
+## Prinsip produk (UI)
 
-## Open decisions
-- **Nama brand final** — sementara dipakai "GameStore" (placeholder, minta penggantian saat penentu); logo belum ada (teks saja).
-- Estetika/visual world final menunggu Fase 7 (toko) & Fase 8 (panel) — dijaga ringan karena halaman sekarang masih placeholder.
+1. Satu aksen warna (lime) untuk aksi & penanda penting; sisanya netral.
+2. Detail akun selalu lebih penting dari dekorasi: rank, skin, binding, harga.
+3. Semua jalur uang harus terasa aman: proteksi pembeli, garansi, stok unik.
+4. Katalog adalah bintang; hero hanya pintu masuk.
+
+## Batas saat ini
+
+- Katalog masih **data demo** (`src/lib/storefront-demo.ts`); sumber DB menyusul Fase 3/7.
+- Pembelian belum aktif — tombol beli memberi pesan jujur sampai fase transaksi.
+- Login modal & halaman auth tersambung ke auth asli (Next server actions), TOTP menyusul.

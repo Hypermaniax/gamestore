@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useActionState, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -56,7 +56,6 @@ export function AccountNewForm({
   initialGameId?: string
 }) {
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
   const [form, setForm] = useState({
     gameId: games.some((game) => game.id === initialGameId) ? initialGameId! : (games[0]?.id ?? ''),
     title: '',
@@ -66,11 +65,11 @@ export function AccountNewForm({
   const [attributes, setAtribut] = useState<Record<string, string>>({})
   const [credentials, setKredensial] = useState<CredentialValues>(EMPTY_CREDENTIALS)
   const [photo, setFoto] = useState<File[]>([])
-  const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
   const [showValidation, setShowValidation] = useState(false)
   const [publishAttempted, setPublishAttempted] = useState(false)
   const [createdId, setCreatedId] = useState<string | null>(null)
+  const [errorDismissed, setErrorDismissed] = useState(false)
 
   const game = games.find((item) => item.id === form.gameId)
   const fields = useMemo(() => parseAttributeSchema(game?.attributeSchema), [game?.attributeSchema])
@@ -82,19 +81,6 @@ export function AccountNewForm({
   const kredensialSebagian =
     Boolean(credentials.email.trim() || credentials.password.trim()) && !kredensialSiap
 
-  if (games.length === 0) {
-    return (
-      <div className="max-w-2xl rounded-2xl border border-dashed p-8">
-        <p className="font-display text-lg font-semibold">No active games yet</p>
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Activate at least one game in Game Master before adding accounts.
-        </p>
-        <Button className="mt-4" render={<Link href="/panel/games" />}>
-          Open Game Master
-        </Button>
-      </div>
-    )
-  }
 
   function validasi(publish: boolean): string[] {
     const missing = requiredFields.filter((field) => !attributes[field.kunci]?.trim())
@@ -130,24 +116,20 @@ export function AccountNewForm({
     return problems
   }
 
-  function simpan(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (pending || createdId) return
+  const [state, formAction, pending] = useActionState<{ error: string | null }, FormData>(
+    async (_prevState, formData) => {
+      if (createdId) return { error: null }
 
-    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
-    const publish = submitter?.value === 'publish'
-    setPublishAttempted(publish)
-    setError(null)
-    setProgress(null)
+      const publish = formData.get('mode') === 'publish'
+      setPublishAttempted(publish)
+      setProgress(null)
 
-    const problems = validasi(publish)
-    if (problems.length > 0) {
-      setShowValidation(true)
-      setError(problems.join(' '))
-      return
-    }
+      const problems = validasi(publish)
+      if (problems.length > 0) {
+        setShowValidation(true)
+        return { error: problems.join(' ') }
+      }
 
-    startTransition(async () => {
       setProgress('Creating account...')
       const created = await createAccountAction({
         gameId: form.gameId,
@@ -157,9 +139,8 @@ export function AccountNewForm({
         attributes: buildAttributeValues(fields, attributes),
       })
       if (!created.ok) {
-        setError(created.message)
         setProgress(null)
-        return
+        return { error: created.message }
       }
       setCreatedId(created.id)
 
@@ -170,9 +151,8 @@ export function AccountNewForm({
         data.set('file', file)
         const uploaded = await uploadAccountPhotoAction(data)
         if (!uploaded.ok) {
-          setError(`Account saved as a draft, but photos failed to upload: ${uploaded.message}`)
           setProgress(null)
-          return
+          return { error: `Account saved as a draft, but photos failed to upload: ${uploaded.message}` }
         }
       }
 
@@ -183,9 +163,8 @@ export function AccountNewForm({
           credentials: formatCredentials(credentials),
         })
         if (!saved.ok) {
-          setError(`Account saved as a draft, but credentials failed to save: ${saved.message}`)
           setProgress(null)
-          return
+          return { error: `Account saved as a draft, but credentials failed to save: ${saved.message}` }
         }
       }
 
@@ -193,18 +172,39 @@ export function AccountNewForm({
         setProgress('Publishing account...')
         const relisted = await relistAccountAction({ id: created.id })
         if (!relisted.ok) {
-          setError(`Account saved as a draft, but publishing failed: ${relisted.message}`)
           setProgress(null)
-          return
+          return { error: `Account saved as a draft, but publishing failed: ${relisted.message}` }
         }
       }
 
       router.push(`/panel/accounts/${created.id}`)
-    })
+      return { error: null }
+    },
+    { error: null },
+  )
+  const error = state.error && !errorDismissed ? state.error : null
+
+  if (games.length === 0) {
+    return (
+      <div className="max-w-2xl rounded-2xl border border-dashed p-8">
+        <p className="font-display text-lg font-semibold">No active games yet</p>
+        <p className="mt-1 max-w-md text-sm text-muted-foreground">
+          Activate at least one game in Game Master before adding accounts.
+        </p>
+        <Button className="mt-4" render={<Link href="/panel/games" />}>
+          Open Game Master
+        </Button>
+      </div>
+    )
   }
 
   return (
-    <form noValidate onSubmit={simpan} className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+    <form
+      noValidate
+      action={formAction}
+      onSubmit={() => setErrorDismissed(false)}
+      className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"
+    >
       <div className="space-y-5">
         <section className="rounded-2xl border bg-card p-5 sm:p-6">
           <div className="mb-5 flex items-start gap-3">
@@ -230,7 +230,7 @@ export function AccountNewForm({
                     setForm((current) => ({ ...current, gameId: value }))
                     setAtribut({})
                     setShowValidation(false)
-                    setError(null)
+                    setErrorDismissed(true)
                   }}
                 >
                   <SelectTrigger id="gameId" className="h-10 w-full">

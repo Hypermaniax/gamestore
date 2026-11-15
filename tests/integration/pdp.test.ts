@@ -47,6 +47,14 @@ describe('prosedur PDP', () => {
         validUntil: new Date(Date.now() + DAY),
       },
     })
+    await prisma.emailOtp.create({
+      data: {
+        userId: user.id,
+        purpose: 'VERIFY_EMAIL',
+        codeHash: 'pdp-otp',
+        expiresAt: new Date(Date.now() + DAY),
+      },
+    })
 
     const result = await hapusDataPribadi({
       identitas: user.email,
@@ -68,6 +76,7 @@ describe('prosedur PDP', () => {
     expect(await prisma.refreshToken.count({ where: { userId: user.id, revoked: false } })).toBe(0)
     expect(await prisma.totpRecovery.count({ where: { userId: user.id, revokedAt: null } })).toBe(0)
     expect((await prisma.emailToken.findFirstOrThrow()).newEmail).toBeNull()
+    expect(await prisma.emailOtp.count({ where: { userId: user.id } })).toBe(0)
     expect(await prisma.adminAuditLog.count({ where: { action: 'PDP_USER_DELETE' } })).toBe(1)
   })
 

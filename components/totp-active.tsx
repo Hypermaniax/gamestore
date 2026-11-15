@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import { Check, Copy, ShieldCheck } from 'lucide-react'
 import { totpRecoveryRegenerateAction } from '@/src/controllers/auth.controller'
 import { totpRecoveryRegenerateSchema } from '@/src/validation/auth'
@@ -19,33 +19,32 @@ const ERROR_COPY: Record<string, string> = {
 }
 
 export function TotpActiveCard() {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
   const [copied, setCopied] = useState(false)
+  const [errorDismissed, setErrorDismissed] = useState(false)
+  const [state, formAction, pending] = useActionState<{ error: string | null }, FormData>(
+    async (_prevState, formData) => {
+      const parsed = totpRecoveryRegenerateSchema.safeParse({
+        password: String(formData.get('password') ?? ''),
+        code: String(formData.get('kode') ?? ''),
+      })
+      if (!parsed.success) {
+        return { error: parsed.error.issues[0]?.message ?? 'Invalid data.' }
+      }
 
-  function regenerate(formData: FormData) {
-    setError(null)
-    const parsed = totpRecoveryRegenerateSchema.safeParse({
-      password: String(formData.get('password') ?? ''),
-      code: String(formData.get('kode') ?? ''),
-    })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid data.')
-      return
-    }
-
-    startTransition(async () => {
       const result = await totpRecoveryRegenerateAction(parsed.data)
       if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? result.message)
-        return
+        return { error: ERROR_COPY[result.code] ?? result.message }
       }
+
       setRecoveryCodes(result.recoveryCodes)
       setOpen(false)
-    })
-  }
+      return { error: null }
+    },
+    { error: null },
+  )
+  const error = state.error && !errorDismissed ? state.error : null
 
   return (
     <section className="rounded-2xl border border-border bg-background/40 p-5 sm:p-6">
@@ -99,7 +98,12 @@ export function TotpActiveCard() {
           </div>
         </div>
       ) : open ? (
-        <form noValidate action={regenerate} className="mt-5 space-y-4">
+        <form
+          noValidate
+          action={formAction}
+          onSubmit={() => setErrorDismissed(false)}
+          className="mt-5 space-y-4"
+        >
           <p className="text-xs text-muted-foreground">
             Regenerate recovery codes if the old ones are lost or leaked. Your current TOTP code is
             still required.
@@ -148,7 +152,7 @@ export function TotpActiveCard() {
               type="button"
               onClick={() => {
                 setOpen(false)
-                setError(null)
+                setErrorDismissed(true)
               }}
               disabled={pending}
               className="h-11 flex-1 rounded-xl border border-border text-xs font-bold transition hover:bg-muted disabled:opacity-60"
@@ -167,7 +171,10 @@ export function TotpActiveCard() {
       ) : (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true)
+            setErrorDismissed(true)
+          }}
           className="mt-5 h-11 w-full rounded-xl border border-border text-sm font-bold transition hover:bg-muted"
         >
           Regenerate recovery codes

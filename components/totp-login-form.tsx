@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState } from 'react'
 import { ArrowLeft, KeyRound } from 'lucide-react'
 import { loginTotpAction } from '@/src/controllers/auth.controller'
 import { totpLoginSchema } from '@/src/validation/auth'
@@ -29,32 +29,30 @@ export function TotpLoginForm({
   onSuccess: (result: { peran: string; username: string; emailVerified: boolean }) => void
   onBack: () => void
 }) {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
+  const [state, formAction, pending] = useActionState<{ error: string | null }, FormData>(
+    async (_prevState, formData) => {
+      const parsed = totpLoginSchema.safeParse({
+        challengeToken,
+        code: String(formData.get('kode') ?? ''),
+      })
+      if (!parsed.success) {
+        return { error: parsed.error.issues[0]?.message ?? 'Invalid code.' }
+      }
 
-  function handleSubmit(formData: FormData) {
-    setError(null)
-    const parsed = totpLoginSchema.safeParse({
-      challengeToken,
-      code: String(formData.get('kode') ?? ''),
-    })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid code.')
-      return
-    }
-
-    startTransition(async () => {
       const result = await loginTotpAction(parsed.data)
       if (!result.ok) {
-        setError(ERROR_COPY[result.code] ?? result.message)
-        return
+        return { error: ERROR_COPY[result.code] ?? result.message }
       }
+
       onSuccess(result)
-    })
-  }
+      return { error: null }
+    },
+    { error: null },
+  )
+  const error = state.error
 
   return (
-    <form noValidate action={handleSubmit}>
+    <form noValidate action={formAction}>
       <div className="flex items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand/15 text-brand-deep">
           <KeyRound className="size-5" />

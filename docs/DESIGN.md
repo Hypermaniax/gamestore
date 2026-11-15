@@ -1,90 +1,55 @@
----
-name: GameStore (nama sementara)
-description: Toko jual-beli akun game — netral, jujur, data-dulu
-colors:
-  background: "oklch(1 0 0)"
-  foreground: "oklch(0.145 0 0)"
-  card: "oklch(1 0 0)"
-  muted: "oklch(0.97 0 0)"
-  muted-foreground: "oklch(0.556 0 0)"
-  border: "oklch(0.922 0 0)"
-  primary: "oklch(0.205 0 0)"
-  primary-foreground: "oklch(0.985 0 0)"
-  destructive: "oklch(0.577 0.245 27.325)"
-  sidebar: "oklch(0.985 0 0)"
-  ring: "oklch(0.708 0 0)"
-  dark-background: "oklch(0.145 0 0)"
-  dark-foreground: "oklch(0.985 0 0)"
-  dark-card: "oklch(0.205 0 0)"
-  dark-border: "oklch(1 0 0 / 10%)"
-typography:
-  display:
-    fontFamily: "var(--font-geist-sans), Geist, system-ui, sans-serif"
-  body:
-    fontFamily: "var(--font-geist-sans), Geist, system-ui, sans-serif"
-  label:
-    fontFamily: "var(--font-geist-sans), Geist, system-ui, sans-serif"
-  mono:
-    fontFamily: "var(--font-geist-mono), Geist Mono, monospace"
-rounded:
-  sm: "calc(0.625rem * 0.6)"
-  md: "calc(0.625rem * 0.8)"
-  lg: "0.625rem"
-  xl: "calc(0.625rem * 1.4)"
-components:
-  button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.primary-foreground}"
-    rounded: "{rounded.md}"
-  button-secondary:
-    backgroundColor: "{colors.muted}"
-    textColor: "{colors.foreground}"
-    rounded: "{rounded.md}"
-  button-destructive:
-    backgroundColor: "{colors.destructive}"
-    textColor: "{colors.background}"
-    rounded: "{rounded.md}"
----
+# DESIGN.md — NEXAPLAY
 
-# Design System: GameStore (nama sementara)
+Acuan visual untuk `app/` dan `components/`. Diambil dari ekspor Figma Make (`project.zip`), dipetakan ke token shadcn di `app/globals.css`.
 
-## Overview
+## Palet (light / dark)
 
-**Creative North Star: `"Rak Sepi, Harga Jujur"`**
+| Token | Light | Dark | Pemakaian |
+|---|---|---|---|
+| `--background` | `#f3f2ed` | `#090d11` | kanvas |
+| `--foreground` | `#111719` | `#f2f5ef` | teks utama |
+| `--card` | `#ffffff` | `#12181d` | kartu, input |
+| `--popover` | `#f8f7f2` | `#12181d` | modal |
+| `--muted-foreground` | `#667073` | `#9da7ab` | teks sekunder |
+| `--border` | rgb(17 23 25 / 12%) | rgb(255 255 255 / 10%) | garis |
+| `--primary` | `#111719` | `#c8ff36` | CTA utama |
+| `--brand` | `#c8ff36` | `#c8ff36` | aksen lime, badge, tombol beli |
+| `--brand-ink` | `#101510` | `#101510` | teks di atas lime |
+| `--brand-deep` | `#6f9018` | `#c8ff36` | lime versi teks (kontras di terang) |
+| `--ring` | `#8aaf25` | `#c8ff36` | fokus |
 
-Sistem visual yang presisi dan tenang: warna netral OKLCH (warisan shadcn base-nova), teks Geist Sans, angka/kode transaksi memakai Geist Mono. Identitas toko ini **netral dan data-dulu**: ornamen minimal; yang paling menonjol haruslah harga, status, dan bukti — bukan dekorasi. Karakter "gamer" dibiarkan datang dari konten (judul game, foto akun), bukan dari warna UI. Dark mode aktif via `.dark` (token lengkap sudah ada).
+Lime `#c8ff36` adalah satu-satunya aksen. Merah hanya untuk error (`--destructive`).
 
-**Key Characteristics:**
-- Netral murni + satu aksen merah `destructive` untuk bahaya/error; kedalaman lewat `border` dan lapisan `muted` (bukan drop-shadow berat).
-- Rounded konsisten dari `--radius: 0.625rem` dengan sub-skala.
-- Bahasa UI `id-ID` — angka Rp dengan titik ribuan, tanggal lokal; ini aturan visual, bukan pelengkap.
-- Tanpa logo — identitas teks brand sampai nama final & logo tersedia.
+## Tipografi
 
-## Colors
+- **Display / judul**: Manrope (`font-display`), weight 700–800, tracking ketat `-0.04em` s/d `-0.075em` pada hero.
+- **Body / UI**: DM Sans (`font-sans`), 400–700.
+- **Mono**: Geist Mono (`font-mono`) untuk label teknis panel.
+- Hero memakai `clamp(3.6rem, 7.5vw, 7.7rem)`, `leading-[.82]`.
 
-Netral murni; merah `destructive` hanya untuk error/bahaya. Light sebagai tema utama, dark via `.dark`. Sidebar memisah diri dengan `sidebar: oklch(0.985 0 0)` + `border` tipis; di dark `1 0 0/10%`.
+## Bentuk & elevasi
 
-## Typography
+- Radius besar: kartu katalog `rounded-[26px]`, hero image `rounded-[34px]`, modal `rounded-[28px]`, input `rounded-xl`.
+- Bayangan lembut dan lebar, bukan glow: `shadow-[0_25px_70px_rgba(20,28,30,.12)]` (kartu hover), `0_30px_100px_rgba(0,0,0,.35)` (modal).
+- Overlay noise halus (`opacity .028`, `mix-blend-soft-light`) di seluruh halaman.
 
-Geist Sans = identitas utama (headings label dan body); Geist Mono untuk kode transaksi, id idempoten, dan kolom tabel data (angka, referensi pembayaran).
+## Gerak
 
-## Layout
+- Transisi 200–500 ms; hover kartu `-translate-y-1`, gambar `scale-105`.
+- Nav link: garis lime tumbuh dari kiri (220 ms).
+- Kurangi gerak saat `prefers-reduced-motion`.
 
-Mobile-first; kontainer terbatas lebar; halaman admin memakai sidebar ±15rem + area kerja `p-8`. Kontrol tanpa kontrolutzt khusus: spacing bawaan Tailwind 4 (4/8 px).
+## Komponen & pola
 
-## Elevation & Depth
+- **Header** sticky 72 px, transparan lalu blur `bg-background/85` saat scroll.
+- **Filter bar katalog** sticky di bawah header, `backdrop-blur-xl`.
+- **Badge**: tag putih/kaca di gambar, diskon lime, promo outline lime.
+- **Form**: kelas `.field` (48 px, `rounded-xl`, fokus lime); dialog pakai `.modal-close`.
+- **Ikon**: `lucide-react`, ukuran 3.5–5 (14–20 px).
+- **Gambar**: `next/image` + `remotePatterns` Unsplash.
 
-**Rata (flat)** — lapisan lewat `border` + permukaan `muted`, bukan drop-shadow. Tonal layering adalah kawan default.
+## Aturan
 
-## Shapes
-
-`rounded-md` untuk kontrol kecil (button, input); kartu/panel `rounded-lg` ke atas. Tanpa rounded penuh via-lebihan.
-
-## Components
-
-Variant mengikuti shadcn base-nova (prop `render`, bukan `asChild`). Input/textarea normatif `bg-transparent border-input` + `focus-visible:ring-ring/50`. Status transaksi dirender sebagai badge dari state machine, tidak pernah hardcode-warned.
-
-## Do's and Don'ts
-
-- **Do**: tampilkan status/nilai dari data; format uang `Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' })`; pakai token tema, tidak hardcode hex.
-- **Don't**: menghias (gradient, glow, badge metal); format uang gaya `en-US` (koma); memasang warna aksen baru — itu sengaja Fase 7.
+- Jangan menambah warna aksen baru. Jangan pakai gradien dekoratif selain scrim gambar.
+- Teks di atas lime selalu `--brand-ink`.
+- Kontras teks minimal 4.5:1; `--brand-deep` ada untuk memenuhi ini di mode terang.

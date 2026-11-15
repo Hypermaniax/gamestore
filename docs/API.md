@@ -44,7 +44,8 @@ Legenda fase: 🟢 MVP · 🔵 Fase 2 · 🔴 wajib sebelum go-live. Ubah bentuk
 | POST | `/auth/refresh` | Tukar refresh token, **dirotasi**: lama hangus namun diberi **masa toleransi 10–30 detik** (dua tab yang refresh bersamaan tidak dianggap pencurian); dipakai ulang setelah toleransi → semua sesi dicabut. Butuh tabel `refresh_tokens` | ✏️ 🟢 |
 | POST | `/auth/logout` | Akhiri **sesi ini saja** (refresh token yang ini dicabut) | ✏️ 🟢 |
 | POST | `/auth/logout-semua` | Naikkan `token_version` → semua perangkat keluar | ➕ 🟢 |
-| POST | `/auth/verify-email`, `/auth/resend-verification` | Buka hak checkout; kirim-ulang rate-limited, jawaban generik | ✅ 🟢 |
+| POST | `/auth/verify-email` | Verifikasi email dengan `{ email?, code }`: kode 6 digit, berlaku 15 menit, maksimal 5 percobaan, sekali pakai; `email` opsional bila sudah login. Membuka hak checkout. | ✅ 🟢 |
+| POST | `/auth/resend-verification` | Kirim ulang kode verifikasi; rate-limited, jawaban generik | ✅ 🟢 |
 | POST | `/auth/forgot-password`, `/auth/reset-password` | Reset sekali pakai; sesi lama mati | ✅ 🟢 |
 | PUT | `/auth/ganti-password` | Wajib password lama; sesi lain dicabut | ✏️ 🟢 |
 | PUT | `/auth/change-email` | **Wajib password saat ini**; email tujuan disimpan di `email_tokens.new_email`; token dikirim ke email lama + baru; dibandingkan **lower(email)** — unik tanpa peduli kapital | ➕ 🟢 |
@@ -162,6 +163,7 @@ Data master (`/game-types`, `/game`, `/themes/active`, `/pages/*`) dibaca **serv
 | Kolom baru **`webhook_events.status`** (`DITERIMA/DIPROSES/GAGAL`) + kunci dedup `(type, incoming_fund_id)` (v9: kolom diganti nama jadi **`incoming_fund_id`**) | dua-fase (simpan → proses → update), bahan `retry` & linimasa |
 | `idempotency_keys`: **PK `(user_id, key)`**, `status` (`PROCESSING/SELESAI/KEDALUWARSA`), `request_hash`, `response_status`, `response_snapshot`, `valid_until` + job penanda kedaluwarsa | klaim key di awal; 409 saat masih berjalan; 422 saat isi beda; key kedaluwarsa dipakai ulang = baris di-overwrite |
 | `email_tokens`: kolom **`new_email`**, type `GANTI_EMAIL_LAMA`/`GANTI_EMAIL_BARU` | ganti-email butuh tempat menyimpan alamat tujuan |
+| Tabel baru **`email_otps`**: user_id, purpose (`VERIFY_EMAIL`), code_hash (HMAC), expires_at, attempts, consumed_at, created_at | verifikasi email memakai kode 6 digit sekali pakai, bukan link token |
 | Tabel baru **`settings`**: key, value, updated_at, updated_by | sumber `/settings/public` + saklar `checkout_aktif` |
 | `audit_reveals`: **ip, user_agent** | bukti sengketa "tidak pernah menerima akun" |
 | `game_accounts`: **CHECK** `status NOT IN ('AVAILABLE','RESERVED') OR credentials_encrypted IS NOT NULL` | akun tak mungkin tampil/terjual tanpa kredensial |
@@ -173,7 +175,7 @@ Data master (`/game-types`, `/game`, `/themes/active`, `/pages/*`) dibaca **serv
 | **v9** CHECK `vouchers.used BETWEEN 0 AND quota`; CHECK konsistensi `transactions.receipt_confirmed`; index `refunds(transaction_id)`, `email_tokens(user_id)`, `totp_recoveries(user_id)`, parsial `transactions(warranty_start)` & `game_accounts(status, game_id) WHERE deleted_at IS NULL` | kuota tak bisa lewat; status konfirmasi tak bisa setengah-terisi; query job & katalog |
 | **v9** Permission baru `game:read`, `voucher:read`, `promotion:read`, `page:read`, `setting:read` | baca tak lagi butuh izin tulis |
 
-Skema jadi: **29 tabel — MVP 27, Fase 2 +2** (`komplain`, `wishlist`).
+Skema jadi: **30 tabel — MVP 28, Fase 2 +2** (`komplain`, `wishlist`).
 
 ## 7. Catatan Implementasi singkat
 
