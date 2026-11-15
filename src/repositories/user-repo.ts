@@ -46,14 +46,23 @@ export function markVerified(userId: bigint, db: Db): Promise<User> {
   return db.user.update({ where: { id: userId }, data: { emailVerified: true } })
 }
 
-/** Change password: swap the hash and invalidate every session except the one re-issued by the caller. */
-export function updatePasswordAndRevokeAll(userId: bigint, passwordHash: string): Promise<unknown> {
+/** Change password: swap the hash, invalidate every session except the one re-issued
+ * by the caller, and spend all pending password-reset tokens. */
+export function updatePasswordAndRevokeAll(
+  userId: bigint,
+  passwordHash: string,
+  at: Date,
+): Promise<unknown> {
   return prisma.$transaction([
     prisma.user.update({
       where: { id: userId },
       data: { passwordHash, tokenVersion: { increment: 1 } },
     }),
     prisma.refreshToken.updateMany({ where: { userId }, data: { revoked: true } }),
+    prisma.emailToken.updateMany({
+      where: { userId, type: 'RESET', usedAt: null },
+      data: { usedAt: at },
+    }),
   ])
 }
 
@@ -101,8 +110,15 @@ export function countActiveAdmins(): Promise<number> {
   return prisma.user.count({ where: { active: true, role: { code: 'ADMIN' } } })
 }
 
-export function updateRole(userId: bigint, roleId: bigint): Promise<User> {
-  return prisma.user.update({ where: { id: userId }, data: { roleId } })
+/** Role changes invalidate the target's sessions so the new role/TOTP rules take effect. */
+export function updateRoleAndRevokeSessions(userId: bigint, roleId: bigint): Promise<unknown> {
+  return prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { roleId, tokenVersion: { increment: 1 } },
+    }),
+    prisma.refreshToken.updateMany({ where: { userId }, data: { revoked: true } }),
+  ])
 }
 
 /** Flip aktif; when deactivating, all sessions are revoked in the same write. */

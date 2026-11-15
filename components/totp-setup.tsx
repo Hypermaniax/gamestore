@@ -31,7 +31,7 @@ function copyToClipboard(value: string): Promise<void> {
   return navigator.clipboard.writeText(value)
 }
 
-export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
+export function TotpSetupFlow({ forced }: { forced?: boolean }) {
   const router = useRouter()
   const [setup, setSetup] = useState<SetupData | null>(null)
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
@@ -41,7 +41,7 @@ export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
     FormData
   >(
     async () => {
-      const result = await totpSetupAction({ challengeToken })
+      const result = await totpSetupAction({})
       if (!result.ok) {
         return { error: ERROR_COPY[result.code] ?? result.message }
       }
@@ -67,7 +67,6 @@ export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
   >(
     async (_prevState, formData) => {
       const parsed = totpActivateSchema.safeParse({
-        challengeToken,
         code: String(formData.get('kode') ?? ''),
       })
       if (!parsed.success) {
@@ -93,7 +92,7 @@ export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
   }
 
   function finish() {
-    if (challengeToken) {
+    if (forced) {
       router.replace('/panel')
       router.refresh()
       return
@@ -138,7 +137,7 @@ export function TotpSetupFlow({ challengeToken }: { challengeToken?: string }) {
             onClick={finish}
             className="h-10 rounded-xl bg-foreground px-4 text-xs font-bold text-background transition hover:opacity-90"
           >
-            {challengeToken ? 'Continue to panel' : 'Done'}
+            {forced ? 'Continue to panel' : 'Done'}
           </button>
         </div>
       </div>

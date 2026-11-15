@@ -90,8 +90,8 @@ export const userAdminService = {
     if (!role) return fail('ROLE_NOT_FOUND', 'Role not found.')
 
     if (target.role.code === roleCode) return { ok: true as const }
-    if (target.id === session.userId && roleCode !== 'ADMIN')
-      return fail('CANNOT_TARGET_SELF', 'You cannot demote your own account.')
+    if (target.id === session.userId)
+      return fail('CANNOT_TARGET_SELF', 'You cannot change your own account role.')
 
     if (target.role.code === 'ADMIN' && roleCode !== 'ADMIN') {
       const admins = await userRepo.countActiveAdmins()
@@ -99,7 +99,7 @@ export const userAdminService = {
         return fail('LAST_ADMIN', 'This is the only active ADMIN; role change denied.')
     }
 
-    await userRepo.updateRole(target.id, role.id)
+    await userRepo.updateRoleAndRevokeSessions(target.id, role.id)
     await auditService.log(session.userId, 'user.role', `user:${target.id}`, {
       dari: target.role.code,
       ke: roleCode,

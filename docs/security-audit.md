@@ -1,5 +1,7 @@
 # Security Audit — GameStore
 
+> **Historical audit.** The current audit is in [`docs/security-audit/`](./security-audit/README.md) (source ref `f94346d`, 2026-11-15). This file is retained for the earlier `b2f4429` review.
+
 - **Date:** 2026-11-14
 - **Source ref:** `b2f4429` (worktree; staged `.agents/skills/security-audit/` files are unrelated to the application)
 - **Scope:** `app/`, `src/`, `components/`, `prisma/`, `deploy/`, `next.config.ts`, `instrumentation.ts`, dependency tree

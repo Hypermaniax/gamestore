@@ -21,16 +21,19 @@ export function findByHash(tokenHash: string): Promise<EmailToken | null> {
 
 /**
  * Reset password is a single logical write: spend the token, replace the hash,
- * bump token_version (kills every access token) and revoke all refresh tokens.
+ * bump token_version (kills every access token), revoke all refresh tokens and
+ * invalidate every other pending RESET token.
  */
 export function consumePasswordReset(
-  tokenId: bigint,
   userId: bigint,
   passwordHash: string,
   at: Date,
 ): Promise<unknown> {
   return prisma.$transaction([
-    prisma.emailToken.update({ where: { id: tokenId }, data: { usedAt: at } }),
+    prisma.emailToken.updateMany({
+      where: { userId, type: 'RESET', usedAt: null },
+      data: { usedAt: at },
+    }),
     prisma.user.update({
       where: { id: userId },
       data: { passwordHash, tokenVersion: { increment: 1 } },
@@ -41,7 +44,8 @@ export function consumePasswordReset(
 
 /**
  * Two-token email change: both rows are spent in the same transaction that moves
- * users.email and kills all previous sessions (old address is notified by the service).
+ * users.email, kills all previous sessions and invalidates pending RESET tokens
+ * (old address is notified by the service).
  */
 export function consumeEmailChange(
   tokenIds: bigint[],
@@ -51,6 +55,10 @@ export function consumeEmailChange(
 ): Promise<unknown> {
   return prisma.$transaction([
     prisma.emailToken.updateMany({ where: { id: { in: tokenIds } }, data: { usedAt: at } }),
+    prisma.emailToken.updateMany({
+      where: { userId, type: 'RESET', usedAt: null },
+      data: { usedAt: at },
+    }),
     prisma.user.update({
       where: { id: userId },
       data: { email, emailVerified: true, tokenVersion: { increment: 1 } },

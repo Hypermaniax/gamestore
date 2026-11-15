@@ -149,10 +149,7 @@ export async function loginFormAction(
     return { error: null, challengeToken: result.token }
   }
   if (result.jalur === 'perlu-setup-totp') {
-    return {
-      error: null,
-      redirectTo: `/totp/setup?token=${encodeURIComponent(result.token)}`,
-    }
+    return { error: null, redirectTo: '/totp/setup' }
   }
 
   return {

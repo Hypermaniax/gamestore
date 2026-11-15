@@ -68,15 +68,15 @@
 ## Fase 2 — Auth + RBAC-resolve 🔄
 
 - [x] Register (BCrypt ≥ 8, role PEMBELI) + verifikasi email (kode OTP 6 digit, HMAC hash, kedaluwarsa, kirim-ulang)
-- [x] Ganti email dua-tahap (`new_email` + konfirmasi); lupa/reset/ganti password
+- [x] Ganti email dua-tahap (`new_email` + konfirmasi); lupa/reset/ganti password; token RESET dihabiskan saat reset/ganti password atau ganti email
 - [x] Login: JWT 15–30 menit + `token_version` + cek `active` tiap aksi/access-request
-- [x] Refresh: cookie httpOnly + Secure + SameSite=Strict, **rotasi + toleransi 10–30 dtk**; logout satu-sesi & logout-semua
+- [x] Refresh: cookie httpOnly + Secure + SameSite=Strict, **rotasi + toleransi 10–30 dtk**; logout satu-sesi & logout-semua; admin wajib TOTP tidak bisa refresh bila TOTP belum aktif
 - [x] RBAC resolve dari database (menu + permission, hormati `revoked_at`); guard anti-kunci diri; CRUD RBAC tetap 🔵
-- [x] TOTP di balik flag `TOTP_WAJIB_ADMIN`: setup/aktifkan (recovery tampil sekali), login/totp (anti-replay `totp_last_step`, terima recovery code), `recovery-baru` (password + TOTP, kode lama `revoked_at`), `reset-totp` (permission + re-auth + email target), alur `perlu_setup_totp` (token 15 menit terbatas), kunci `totp_failures`/`totp_locked_until` di DB; prosedur darurat CLI 🔴 (uji di fase 10)
+- [x] TOTP di balik flag `TOTP_WAJIB_ADMIN`: setup/aktifkan (recovery tampil sekali), login/totp (anti-replay `totp_last_step`, terima recovery code), `recovery-baru` (password + TOTP, kode lama `revoked_at`), `reset-totp` (permission + re-auth + email target), alur `perlu_setup_totp` (token 15 menit terbatas di cookie HttpOnly, bukan URL), kunci `totp_failures`/`totp_locked_until` di DB; prosedur darurat CLI 🔴 (uji di fase 10)
 - [x] Rate limit rate-limiter-flexible (in-memory) per bucket: login, register, email, token, refresh, totp (bucket checkout/reveal/polling/webhook dipasang di fase terkait)
 - [x] Email admin infra (event operasional → inbox admin)
 - [x] `admin_audit_logs` (INSERT/SELECT) + aksi pembaca audit-log
-- [x] Aksi users: list, ubah role, aktif/nonaktif, `force-logout`, reset TOTP (UI panel menyusul Fase 8)
+- [x] Aksi users: list, ubah role (mencabut sesi target), aktif/nonaktif, `force-logout`, reset TOTP (UI panel menyusul Fase 8)
 
 **Selesai bila:** cabut grant → akses tertutup; user nonaktif → token ditolak; dua tab refresh tidak saling rotasi; kunci TOTP bertahan lintas restart.
 

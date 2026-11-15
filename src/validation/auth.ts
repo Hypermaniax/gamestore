@@ -79,12 +79,9 @@ export const totpLoginSchema = z.object({
   device: z.string().max(150).optional(),
 })
 
-export const totpSetupSchema = z.object({
-  challengeToken: tokenSchema.optional(),
-})
+export const totpSetupSchema = z.object({})
 
 export const totpActivateSchema = z.object({
-  challengeToken: tokenSchema.optional(),
   code: totpDigitsSchema,
 })
 

@@ -304,7 +304,7 @@ Catatan: seluruh menu sidebar mengarah ke halaman panel yang sudah dibuat.
 | `/forgot-password` | Minta link reset |
 | `/reset-password?token=...` | Password baru |
 | `/change-email/confirm` | Konfirmasi dua token ganti email |
-| `/totp/setup?token=...` | Setup TOTP paksa setelah login admin |
+| `/totp/setup` | Setup TOTP paksa setelah login admin |
 | `/account` | Profil, ganti email/password, TOTP, logout semua |
 | `/panel` | Dashboard admin |
 | `/panel/dashboard` | Redirect ke `/panel` |

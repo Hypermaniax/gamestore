@@ -37,19 +37,19 @@ Legenda fase: 🟢 MVP · 🔵 Fase 2 · 🔴 wajib sebelum go-live. Ubah bentuk
 | Method | Endpoint | Kegunaan | Fase |
 |---|---|---|---|
 | POST | `/auth/register` | Daftar sebagai PEMBELI (email wajib); kirim email verifikasi | ✅ 🟢 |
-| POST | `/auth/login` | Login → access token (cookie httpOnly) + cookie refresh. Bila TOTP aktif → balas `perlu_totp` + token sementara; bila TOTP **wajib** (`TOTP_WAJIB_ADMIN`) tapi belum aktif → balas `perlu_setup_totp` + token sementara **15 menit** yang hanya valid untuk aksi `totpSetup` & `totpAktifkan` | ✏️ 🟢 |
+| POST | `/auth/login` | Login → access token (cookie httpOnly) + cookie refresh. Bila TOTP aktif → balas `perlu_totp` + token sementara; bila TOTP **wajib** (`TOTP_WAJIB_ADMIN`) tapi belum aktif → balas `perlu_setup_totp` dan menyimpan token sementara **15 menit** di cookie HttpOnly (bukan URL); token hanya valid untuk aksi `totpSetup` & `totpAktifkan` | ✏️ 🟢 |
 | POST | `/auth/login/totp` | Langkah-2 ADMIN: kode 6 digit atau recovery code; token sementara berlaku **5 menit** dan hanya valid untuk endpoint ini; kode yang sudah dipakai ditolak (anti-replay); rate-limited + kunci sementara setelah N gagal (disimpan di `users.totp_failures` / `totp_locked_until` — bertahan lintas restart). Dibangun di tahap 2, **wajib-aktif sebelum go-live** | ➕ 🔴 |
-| POST | `/auth/totp/setup`, `/auth/totp/aktifkan` | Buat secret + QR; konfirmasi kode pertama; tampilkan recovery code **sekali saja**; bisa dipanggil dengan token `perlu_setup_totp` (onboarding admin saat TOTP wajib) | ➕ 🔴 |
+| POST | `/auth/totp/setup`, `/auth/totp/aktifkan` | Buat secret + QR; konfirmasi kode pertama; tampilkan recovery code **sekali saja**; bisa dipanggil dengan cookie `totp_setup` (onboarding admin saat TOTP wajib), bukan token dari URL/body | ➕ 🔴 |
 | POST | `/auth/totp/recovery-baru` | Regenerasi recovery code: wajib password + kode TOTP valid; kode lama dicabut (`totp_recoveries.revoked_at`); kode baru tampil **sekali saja** | ➕ 🔴 |
-| POST | `/auth/refresh` | Tukar refresh token, **dirotasi**: lama hangus namun diberi **masa toleransi 10–30 detik** (dua tab yang refresh bersamaan tidak dianggap pencurian); dipakai ulang setelah toleransi → semua sesi dicabut. Butuh tabel `refresh_tokens` | ✏️ 🟢 |
+| POST | `/auth/refresh` | Tukar refresh token, **dirotasi**: lama hangus namun diberi **masa toleransi 10–30 detik** (dua tab yang refresh bersamaan tidak dianggap pencurian); dipakai ulang setelah toleransi → semua sesi dicabut. Butuh tabel `refresh_tokens`. Admin wajib TOTP tidak bisa refresh bila TOTP belum aktif | ✏️ 🟢 |
 | POST | `/auth/logout` | Akhiri **sesi ini saja** (refresh token yang ini dicabut) | ✏️ 🟢 |
 | POST | `/auth/logout-semua` | Naikkan `token_version` → semua perangkat keluar | ➕ 🟢 |
 | POST | `/auth/verify-email` | Verifikasi email dengan `{ email?, code }`: kode 6 digit, berlaku 15 menit, maksimal 5 percobaan, sekali pakai; `email` opsional bila sudah login. Membuka hak checkout. | ✅ 🟢 |
 | POST | `/auth/resend-verification` | Kirim ulang kode verifikasi; rate-limited, jawaban generik | ✅ 🟢 |
-| POST | `/auth/forgot-password`, `/auth/reset-password` | Reset sekali pakai; sesi lama mati | ✅ 🟢 |
-| PUT | `/auth/ganti-password` | Wajib password lama; sesi lain dicabut | ✏️ 🟢 |
+| POST | `/auth/forgot-password`, `/auth/reset-password` | Reset sekali pakai; sesi lama mati; token RESET lain dihabiskan | ✅ 🟢 |
+| PUT | `/auth/ganti-password` | Wajib password lama; sesi lain dicabut; token RESET lain dihabiskan | ✏️ 🟢 |
 | PUT | `/auth/change-email` | **Wajib password saat ini**; email tujuan disimpan di `email_tokens.new_email`; token dikirim ke email lama + baru; dibandingkan **lower(email)** — unik tanpa peduli kapital | ➕ 🟢 |
-| POST | `/auth/change-email/confirm` | Konfirmasi **kedua** token (lama + baru) → email berganti; sesi lain dicabut; pemberitahuan ke alamat lama | ➕ 🟢 |
+| POST | `/auth/change-email/confirm` | Konfirmasi **kedua** token (lama + baru) → email berganti; sesi lain dicabut; token RESET lain dihabiskan; pemberitahuan ke alamat lama | ➕ 🟢 |
 | GET | `/auth/me`, `/auth/menu` | Profil (+ status verifikasi email); menu sidebar dari database | ✅ 🟢 |
 | DELETE | `/auth/account` | Hapus/anonimkan data pribadi; transaksi tetap ada tanpa identitas (hak UU PDP) | ➕ 🔵 |
 
@@ -138,7 +138,7 @@ Data master (`/game-types`, `/game`, `/themes/active`, `/pages/*`) dibaca **serv
 |---|---|---|---|
 | GET | `/panel/audit?actor=&action=&from=` | Baca `admin_audit_logs` (tabel tersedia; halaman panel sudah ada) | ➕ 🟢 |
 | GET | `/panel/audit?transaction=` | Siapa mereveal kredensial, kapan | ➕ 🟢 |
-| CRUD | `/panel/users` | User (list, ubah role, aktif/nonaktif); guard anti-kunci diri | ✅ 🟢 |
+| CRUD | `/panel/users` | User (list, ubah role, aktif/nonaktif); guard anti-kunci diri; ubah role mencabut sesi target | ✅ 🟢 |
 | CRUD & sync | `/rbac/role`, `/rbac/menu`, `/rbac/permission` (+`/menu`, `/permission`) | Role, menu & permission dari database (seed & aturan tetap MVP; **CRUD-nya Fase 2**) | ✅ 🔵 |
 | POST | `/panel/users/{id}/force-logout` | Cabut semua sesi user (akun diduga bocor) | ➕ 🟢 |
 | POST | `/panel/users/{id}/reset-totp` | Admin kehilangan perangkat — permission **`totp:reset`**; wajib **re-autentikasi** admin pelaksana; **email pemberitahuan** ke target user; jika satu-satunya ADMIN kehilangan perangkat + recovery code → **prosedur darurat CLI** (env var darurat, tercatat audit) | ➕ 🔴 |

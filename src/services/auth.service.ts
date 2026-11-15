@@ -15,6 +15,9 @@ import {
   writeRefreshCookie,
   readRefreshCookie,
   clearAllCookies,
+  readTotpSetupCookie,
+  writeTotpSetupCookie,
+  clearTotpSetupCookie,
   type SessionClaims,
 } from '../lib/session'
 import * as userRepo from '../repositories/user-repo'
@@ -124,18 +127,30 @@ function readSecret(user: UserWithRole): string | null {
 }
 
 /**
- * TOTP setup can run from a normal session (voluntary) or from a `totp-setup`
- * challenge token (forced onboarding, no session yet).
+ * TOTP setup can run from a normal session (voluntary) or from the forced-setup
+ * HttpOnly cookie. The setup challenge is never accepted from the URL or client body.
  */
-async function resolveTotpActor(challengeToken?: string): Promise<UserWithRole | UnionError> {
-  if (challengeToken) {
-    const claims = await readChallengeToken(challengeToken, 'totp-setup')
-    if (!claims) return fail('TOKEN_INVALID', { message: 'TOTP setup token has expired.' })
+async function resolveTotpActor(): Promise<UserWithRole | UnionError> {
+  const setupToken = await readTotpSetupCookie()
+  if (setupToken) {
+    const claims = await readChallengeToken(setupToken, 'totp-setup')
+    if (!claims) {
+      await clearTotpSetupCookie()
+      return fail('TOKEN_INVALID', { message: 'TOTP setup session expired. Please sign in again.' })
+    }
     const user = await userRepo.findByIdWithRole(claims.userId)
-    if (!user || !user.active || user.tokenVersion !== claims.tokenVersion || user.role.code !== 'ADMIN')
-      return fail('TOKEN_INVALID', { message: 'TOTP setup token is invalid.' })
+    if (
+      !user ||
+      !user.active ||
+      user.tokenVersion !== claims.tokenVersion ||
+      user.role.code !== 'ADMIN'
+    ) {
+      await clearTotpSetupCookie()
+      return fail('TOKEN_INVALID', { message: 'TOTP setup session expired. Please sign in again.' })
+    }
     return user
   }
+
   const session = await authService.verifySession()
   if (!session) return fail(AUTH_ERRORS.session.code, AUTH_ERRORS.session)
   const user = await userRepo.findByIdWithRole(session.userId)
@@ -387,7 +402,6 @@ export const authService = {
     if (!user || !user.active) return fail('TOKEN_INVALID', { message: 'The reset link is invalid.' })
 
     await emailTokenRepo.consumePasswordReset(
-      row.id,
       user.id,
       await bcrypt.hash(password, BCRYPT_ROUNDS),
       now,
@@ -411,9 +425,11 @@ export const authService = {
     const matches = await bcrypt.compare(oldPassword, user.passwordHash)
     if (!matches) return fail('PASSWORD_INVALID', { message: 'The current password does not match.' })
 
+    const now = realClock.now()
     await userRepo.updatePasswordAndRevokeAll(
       user.id,
       await bcrypt.hash(newPassword, BCRYPT_ROUNDS),
+      now,
     )
 
     // token_version changed → re-issue the session so this device stays logged in.
@@ -536,7 +552,7 @@ export const authService = {
   ): Promise<
     | Result<{ jalur: 'langsung'; peran: string; username: string; emailVerified: boolean }>
     | Result<{ jalur: 'perlu-totp'; token: string }>
-    | Result<{ jalur: 'perlu-setup-totp'; token: string }>
+    | Result<{ jalur: 'perlu-setup-totp' }>
     | UnionError
   > {
     const parsed = parseInput(loginSchema, input)
@@ -558,7 +574,8 @@ export const authService = {
     }
     if (user.role.code === 'ADMIN' && isTotpRequired()) {
       const token = await createChallengeToken(toSession(user as UserWithRole), 'totp-setup')
-      return { ok: true, jalur: 'perlu-setup-totp', token }
+      await writeTotpSetupCookie(token)
+      return { ok: true, jalur: 'perlu-setup-totp' }
     }
     await authService.issueSession(user as UserWithRole, device)
     return {
@@ -658,7 +675,7 @@ export const authService = {
     const limited = await guardRateLimit('totpIp')
     if (limited) return limited
 
-    const actor = await resolveTotpActor(parsed.data.challengeToken)
+    const actor = await resolveTotpActor()
     if (isUnionError(actor)) return actor
     if (actor.totpActive)
       return fail('TOTP_ALREADY_ACTIVE', { message: 'TOTP is already active. Reset it first to create a new secret.' })
@@ -679,8 +696,13 @@ export const authService = {
       (await guardRateLimit('totpIp')) ?? (await guardRateLimit('totp'))
     if (limited) return limited
 
-    const actor = await resolveTotpActor(parsed.data.challengeToken)
+    const forcedSetup = !!(await readTotpSetupCookie())
+    const actor = await resolveTotpActor()
     if (isUnionError(actor)) return actor
+    if (actor.totpActive)
+      return fail('TOTP_ALREADY_ACTIVE', {
+        message: 'TOTP is already active. Regenerate recovery codes from your account instead.',
+      })
     if (!actor.totpSecretEncrypted || !actor.totpKeyVersion)
       return fail('TOTP_NOT_SETUP', { message: 'Request a TOTP secret first.' })
 
@@ -702,8 +724,9 @@ export const authService = {
       now,
     )
 
-    // Forced onboarding (challenge path) completes the login.
-    if (parsed.data.challengeToken) await authService.issueSession(actor)
+    // Forced onboarding completes the login after activation.
+    if (forcedSetup) await authService.issueSession(actor)
+    await clearTotpSetupCookie()
     return { ok: true, recoveryCodes }
   },
 
@@ -792,6 +815,10 @@ export const authService = {
     const user = await userRepo.findByIdWithRole(row.userId)
     const session = user ? toSession(user) : null
     if (!user || !user.active || !session || user.tokenVersion !== session.tokenVersion) {
+      await revokeFamily()
+      return fail(AUTH_ERRORS.session.code, AUTH_ERRORS.session)
+    }
+    if (user.role.code === 'ADMIN' && isTotpRequired() && !user.totpActive) {
       await revokeFamily()
       return fail(AUTH_ERRORS.session.code, AUTH_ERRORS.session)
     }

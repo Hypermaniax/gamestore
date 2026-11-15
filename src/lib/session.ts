@@ -12,6 +12,7 @@ const REFRESH_COOKIE = 'refresh'
 const REFRESH_TTL_DAYS = 30
 const TOTP_CHALLENGE_TTL_MINUTES = 5
 const TOTP_SETUP_CHALLENGE_TTL_MINUTES = 15
+const TOTP_SETUP_COOKIE = 'totp_setup'
 
 export type ChallengeKind = 'totp2' | 'totp-setup'
 
@@ -28,10 +29,13 @@ interface JwtClaims extends Record<string, unknown> {
   rid: string
   rkode: string
   tv: number
+  typ?: 'session' | 'challenge'
+  kind?: ChallengeKind
 }
 
 export async function createSessionToken(claims: SessionClaims): Promise<string> {
   return new SignJWT({
+    typ: 'session',
     uname: claims.username,
     rid: claims.roleId.toString(),
     rkode: claims.roleKode,
@@ -81,8 +85,30 @@ export async function clearRefreshCookie(): Promise<void> {
   store.delete(REFRESH_COOKIE)
 }
 
+/** Forced-TOTP setup challenge is HttpOnly and never sent through the URL. */
+export async function writeTotpSetupCookie(token: string): Promise<void> {
+  const store = await cookies()
+  store.set(TOTP_SETUP_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+    maxAge: TOTP_SETUP_CHALLENGE_TTL_MINUTES * 60,
+  })
+}
+
+export async function readTotpSetupCookie(): Promise<string | null> {
+  const store = await cookies()
+  return store.get(TOTP_SETUP_COOKIE)?.value ?? null
+}
+
+export async function clearTotpSetupCookie(): Promise<void> {
+  const store = await cookies()
+  store.delete(TOTP_SETUP_COOKIE)
+}
+
 export function clearAllCookies(): Promise<void> {
-  return Promise.all([clearSessionCookie(), clearRefreshCookie()]).then(() => undefined)
+  return Promise.all([clearSessionCookie(), clearRefreshCookie(), clearTotpSetupCookie()]).then(() => undefined)
 }
 
 // TOTP second-step challenge token — 5 minutes, purpose-bound (kind claim), NOT a cookie.
@@ -92,12 +118,13 @@ export async function createChallengeToken(
   kind: ChallengeKind,
 ): Promise<string> {
   return new SignJWT({
+    typ: 'challenge',
     kind,
     uname: claims.username,
     rid: claims.roleId.toString(),
     rkode: claims.roleKode,
     tv: claims.tokenVersion,
-  } satisfies JwtClaims & { kind: string })
+  } satisfies JwtClaims)
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(claims.userId.toString())
     .setIssuedAt()
@@ -112,8 +139,30 @@ export async function readChallengeToken(
   kind: ChallengeKind,
 ): Promise<SessionClaims | null> {
   try {
-    const verified = await jwtVerify<JwtClaims & { kind: string }>(token, loadJwtSecret())
+    const verified = await jwtVerify<JwtClaims>(token, loadJwtSecret())
+    if (verified.payload.typ !== undefined && verified.payload.typ !== 'challenge') return null
     if (verified.payload.kind !== kind) return null
+    return {
+      userId: BigInt(verified.payload.sub!),
+      username: verified.payload.uname,
+      roleId: BigInt(verified.payload.rid),
+      roleKode: verified.payload.rkode,
+      tokenVersion: verified.payload.tv,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Verify a session JWT — null when invalid or when a challenge token is passed.
+ * Kept separate from cookie access so token-purpose checks are directly testable.
+ */
+export async function verifySessionToken(token: string): Promise<SessionClaims | null> {
+  try {
+    const verified = await jwtVerify<JwtClaims>(token, loadJwtSecret())
+    if (verified.payload.kind !== undefined) return null
+    if (verified.payload.typ !== undefined && verified.payload.typ !== 'session') return null
     return {
       userId: BigInt(verified.payload.sub!),
       username: verified.payload.uname,
@@ -136,16 +185,5 @@ export async function readSession(): Promise<SessionClaims | null> {
     return null
   }
   if (!value) return null
-  try {
-    const verified = await jwtVerify<JwtClaims>(value, loadJwtSecret())
-    return {
-      userId: BigInt(verified.payload.sub!),
-      username: verified.payload.uname,
-      roleId: BigInt(verified.payload.rid),
-      roleKode: verified.payload.rkode,
-      tokenVersion: verified.payload.tv,
-    }
-  } catch {
-    return null
-  }
+  return verifySessionToken(value)
 }

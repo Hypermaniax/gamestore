@@ -1,4 +1,4 @@
-# 📋 PLAN.md — Toko Online Akun Game (Full-stack Next.js) — v29
+# 📋 PLAN.md — Toko Online Akun Game (Full-stack Next.js) — v42
 
 > Website toko online penjualan akun game (Mobile Legends, Clash of Clans, Genshin, PUBG, dll).
 > **Satu aplikasi Next.js** (halaman + aksi server). Dirancang production-grade sejak awal, sekaligus
@@ -9,6 +9,15 @@
 > **Label:** 🟢 **MVP** = wajib untuk toko bisa jualan · 🔵 **Fase 2** = peningkatan
 > setelah MVP jalan · 🔴 **Wajib sebelum go-live** = boleh dikerjakan belakangan,
 > tapi tidak boleh dilewati sebelum toko dibuka untuk publik.
+
+> **Status autentikasi (2026-11-16):** Verifikasi email memakai OTP 6 digit
+> (`email_otps`, commit `a26a5bf`). TOTP admin **diaktifkan** lewat
+> `TOTP_WAJIB_ADMIN=true`; admin tanpa TOTP dipaksa setup saat login. F-01
+> (challenge token diterima sebagai session) sudah diperbaiki: `readSession`
+> menolak token dengan `kind`/`typ` challenge. Token setup TOTP dipindah ke
+> cookie HttpOnly (bukan URL), perubahan role mencabut sesi target, `refresh()`
+> menegakkan TOTP admin, dan token RESET dihabiskan saat password/email berubah.
+> Migrasi ke OTP login belum diterapkan.
 
 ---
 
@@ -374,7 +383,7 @@ Tanpa aturan ini `idempotency_keys`, `webhook_events`, dan `refresh_tokens` tumb
 
 ### 7.1 Registrasi, verifikasi, ganti email, lupa password 🟢
 1. Daftar: username, email, password (BCrypt, minimal 8 karakter) → role selalu PEMBELI
-2. Email berisi kode verifikasi 6 digit (disimpan sebagai HMAC hash, berlaku 15 menit, maksimal 5 percobaan, sekali pakai)
+2. Email berisi kode verifikasi 6 digit (disimpan sebagai HMAC hash, berlaku 15 menit, maksimal 5 percobaan, sekali pakai). Implementasi: `email_otps` + `src/lib/email-otp.ts`; kirim ulang punya cooldown dan tidak membocorkan apakah email terdaftar.
 3. Belum terverifikasi: boleh browse dan login, **tidak boleh checkout**
 4. **Ganti email**: wajib password saat ini; email tujuan disimpan di `email_tokens.new_email`; token dikirim ke email lama + baru (`GANTI_EMAIL_LAMA`/`GANTI_EMAIL_BARU`); email berganti setelah **keduanya** dikonfirmasi (`POST /auth/change-email/confirm`); email unik (abaikan kapital); sesi lain dicabut dan pemberitahuan dikirim ke alamat lama
 5. Lupa password: token reset sekali pakai; berhasil → `token_version` naik (semua sesi lama mati)
@@ -464,7 +473,7 @@ QRIS/VA dinamis umumnya sekali pakai, tetapi sistem tidak boleh bergantung pada 
 - Kelola user (list, ubah role, aktif/nonaktif, `force-logout`, `reset-totp`) dengan guard anti-kunci diri; semua perubahan tercatat di `admin_audit_logs` (tabel bisa dibaca via `/panel/audit`)
 - /rbac CRUD 🔵 Fase 2 (seed & aturan tetap MVP)
 - Pengaturan toko: saklar `checkout_aktif`, `nama_toko`, `kontak_cs`, `pesan_pengumuman` (`PUT /panel/settings`, permission `setting:write`)
-- Login admin wajib **TOTP** 🔴; admin yang belum setup saat flag wajib → `perlu_setup_totp` (token terbatas 15 menit) → setup → recovery code tampil sekali; regenerasi lewat `/auth/totp/recovery-baru`
+- Login admin wajib **TOTP** 🔴; admin yang belum setup saat flag wajib → `perlu_setup_totp` (token terbatas 15 menit) → setup → recovery code tampil sekali; regenerasi lewat `/auth/totp/recovery-baru`. **Status 2026-11-16:** `TOTP_WAJIB_ADMIN=true`; admin tanpa TOTP dipaksa setup. OTP 6 digit tetap khusus verifikasi email, bukan pengganti TOTP. Token setup TOTP dipindah ke cookie HttpOnly; tidak lagi ditaruh di URL.
 
 ### 7.12 Tema website 🟢
 - MVP: tema statis dari seed + **pilihan terang/gelap** pembeli; `.tokens` jsonb validasi ketat (warna hex, font dari whitelist, URL https whitelist)
@@ -538,11 +547,12 @@ Sidebar dirender dari menu di database (server component, tabel `role_menus`): a
 - Kredensial: AES-GCM (IV 12 byte acak, AAD = `akun:<id>`, keyring `key_version`), tulis-saja via admin (tanpa GET), ditolak saat `RESERVED/SOLD`; tidak masuk DTO/log; log query Prisma mati di prod; backup key terpisah dari backup database
 - Mekanisme **prosedur darurat TOTP**: env var darurat + CLI (satu-satunya admin kehilangan perangkat & recovery) — wajib ganti password setelahnya, tercatat audit
 - Webhook: token constant-time, cocokkan amount dan external_id, **dua-fase + atomik**, dedup (type+incoming_fund_id)
+- **Pemisahan OTP vs TOTP:** OTP 6 digit (`email_otps`, `src/lib/email-otp.ts`) hanya untuk verifikasi email; TOTP (`users.totp_*`, `totp_recoveries`) tetap second factor admin. **Belum ada OTP login.**
 - ADMIN: TOTP wajib 🔴; `reset-totp` = permission `totp:reset` + **re-autentikasi + email pemberitahuan ke target**
-- TOTP: kode yang sudah dipakai ditolak (`totp_last_step`); token sementara `perlu_totp` berlaku 5 menit dan hanya valid untuk `/auth/login/totp`; rate limit + kunci sementara setelah N gagal (`totp_failures`/`totp_locked_until` di database — bertahan lintas restart); token `perlu_setup_totp` 15 menit hanya valid untuk setup/aktifkan; regenerasi recovery code wajib password + kode TOTP (kode lama `revoked_at`); secret dienkripsi dengan keyring (`totp_key_version`)
+- TOTP: kode yang sudah dipakai ditolak (`totp_last_step`); token sementara `perlu_totp` berlaku 5 menit dan hanya valid untuk `/auth/login/totp`; rate limit + kunci sementara setelah N gagal (`totp_failures`/`totp_locked_until` di database — bertahan lintas restart); token `perlu_setup_totp` 15 menit hanya valid untuk setup/aktifkan dan disimpan di cookie HttpOnly; regenerasi recovery code wajib password + kode TOTP (kode lama `revoked_at`); secret dienkripsi dengan keyring (`totp_key_version`)
 - Tabel bukti (`admin_audit_logs`, `audit_reveals`): user aplikasi hanya `INSERT`/`SELECT`
 - Header keamanan (HSTS, CSP, frame-deny, nosniff); kontrak error typed-union + kode machine (webhook memakai status HTTP nyata untuk retry Xendit); object-level authorization
-- Email & akun: error generik, email unik `lower(email)`, ganti email dua-tahap
+- Email & akun: error generik, email unik `lower(email)`, ganti email dua-tahap; token RESET dihabiskan saat reset/ganti password atau ganti email
 
 ## 12. Tahap Pengerjaan & Definition of Done
 
@@ -676,3 +686,4 @@ Progres Fase 0–1 selesai: Next 16.4.6 + shadcn (base-nova), Prisma 7.10.1, 27 
 - 2026-11-13: **v39** (Fase 21 — copy UI Inggris) — seluruh copy UI storefront, auth, akun, pesanan, panel, email transaksional, validasi Zod, dan pesan error/alert diterjemahkan ke Inggris; `aria-label`, `placeholder`, `alt`, empty state, konfirmasi, dan metadata ikut diperbarui. Tanggal memakai `en-GB` + `Asia/Jakarta`, sedangkan Rupiah/format angka tetap `id-ID`. Seed menu/permission/role diperbarui ke Inggris; migration `20261113170000_english_ui_labels` menyinkronkan data system yang sudah ada. Konten produk/legal/admin tetap sebagai data. Verifikasi: 49 tes / 15 file, `tsc`, `lint`, `build`, seluruh halaman publik/auth/panel GET 200, label sidebar Inggris terverifikasi.
 - 2026-11-13: **v40** (Fase 22 — public routes English) — seluruh route publik/auth memakai segmen Inggris: `/account`, `/accounts/[slug]`, `/orders`, `/orders/[code]`, `/pages/[code]`, `/register`, `/forgot-password`, `/verify-email`, `/change-email/confirm`. Parameter dinamis `[kode]` → `[code]`; kode halaman statis menjadi `terms-and-conditions`, `privacy`, `warranty` via migration `20261113180000_english_page_codes`. Redirect 308 menjaga URL lama, termasuk `/halaman/syarat-ketentuan` → `/pages/terms-and-conditions`. Callback Xendit pindah ke `/api/v1/payments/webhook/xendit`; path lama tetap sebagai alias kompatibilitas. Link internal, email, sitemap, robots, dan dokumentasi route diperbarui. Verifikasi: 49 tes / 15 file, `tsc`, `lint`, `build`; semua route baru 200, URL lama 308 ke tujuan baru.
 - 2026-11-14: **v41** (verifikasi email via OTP) — verifikasi email registrasi tidak lagi memakai link token; server membuat kode 6 digit (`node:crypto.randomInt`), menyimpan HMAC-SHA256 di tabel baru `email_otps` (purpose `VERIFY_EMAIL`, expiry 15 menit, maks 5 percobaan, sekali pakai), lalu mengirim kode lewat `emailService`/Nodemailer. `/verify-email` menjadi form kode (email terkunci bila sudah login), `verifyEmail` atomic consume + `emailVerified=true`, `resend-verification` menginvalidasi kode lama dan tetap rate-limited. PDP dan `RetensiJob` ikut membersihkan `email_otps`. Verifikasi: `tsc`, `lint`, migration `20261114120000_email_verification_otp` diterapkan ke dev.
+- 2026-11-16: **v42** (hardening auth & TOTP) — token session/challenge dipisah dengan claim `typ`/`kind` (`readSession` menolak challenge), TOTP setup dipindah ke cookie HttpOnly `totp_setup` (bukan URL/body), `activateTotp` menolak akun yang sudah aktif, `changeRole` memblokir perubahan role diri sendiri dan mencabut sesi target (`tokenVersion` + refresh revoke), `refresh()` menolak ADMIN wajib-TOTP yang belum aktif, serta token RESET dihabiskan pada reset/ganti password atau ganti email. `.env` lokal mengeset `TOTP_WAJIB_ADMIN=true`. Verifikasi: `tsc`, `lint`, `build` hijau; harness token: challenge sebagai session = null, session sebagai challenge = null.
