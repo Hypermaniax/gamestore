@@ -10,6 +10,7 @@ import { GameCard } from './game-card'
 import { CatalogFilters } from './catalog-filters'
 import { PaginationLinks } from './pagination-controls'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Skeleton, SkeletonLines, SkeletonPill } from '@/components/skeletons/base'
 
 const PAGE_SIZE = 9
 
@@ -23,28 +24,75 @@ export function CatalogSkeleton() {
     >
       <div className="mb-10 grid gap-8 border-b border-border pb-8 lg:grid-cols-[1fr_auto] lg:items-end">
         <div>
-          <div className="h-3 w-36 rounded bg-muted" />
-          <div className="mt-5 h-14 w-[min(36rem,92%)] rounded bg-muted sm:h-20" />
-          <div className="mt-5 h-4 w-[min(28rem,100%)] rounded bg-muted" />
-        </div>
-        <div className="flex items-end gap-8">
-          <div>
-            <div className="h-3 w-16 rounded bg-muted" />
-            <div className="mt-3 h-9 w-12 rounded bg-muted" />
+          <div className="mb-5 flex items-center gap-3">
+            <Skeleton className="h-3 w-6" />
+            <Skeleton className="h-px w-9" />
+            <Skeleton className="h-3 w-28" />
           </div>
+          <Skeleton className="h-14 w-[min(32rem,92%)] sm:h-20" />
+          <SkeletonLines
+            count={2}
+            className="mt-5 max-w-xl"
+            lineClassName="h-4"
+            widths={['w-full', 'w-2/3']}
+          />
+        </div>
+        <div className="flex items-end gap-7">
           <div>
-            <div className="h-3 w-12 rounded bg-muted" />
-            <div className="mt-3 h-9 w-20 rounded bg-muted" />
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="mt-3 h-9 w-12" />
+          </div>
+          <div className="h-12 w-px bg-border" />
+          <div>
+            <Skeleton className="h-3 w-12" />
+            <Skeleton className="mt-3 h-8 w-20" />
           </div>
         </div>
       </div>
-      <div className="mb-8 h-[72px] rounded-[1.9rem] border border-border bg-muted/30" />
+
+      <div className="relative z-30 mb-8 rounded-[1.9rem] border border-border bg-background/90 p-2 shadow-[0_22px_60px_-42px_rgba(17,23,25,.55)]">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <Skeleton className="h-12 w-full rounded-[1.35rem] bg-card lg:w-80" />
+          <div className="hide-scrollbar flex min-w-0 flex-1 gap-1.5 overflow-x-auto rounded-[1.35rem] bg-foreground/[.025] p-1">
+            {Array.from({ length: 5 }, (_, index) => (
+              <SkeletonPill key={index} className="h-10 w-24 shrink-0 rounded-[1rem]" />
+            ))}
+          </div>
+          <Skeleton className="h-10 w-28 rounded-[1rem]" />
+        </div>
+      </div>
+
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <Skeleton className="h-3 w-48" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 lg:gap-6">
-        {Array.from({ length: 6 }, (_, index) => (
-          <div
+        {Array.from({ length: 9 }, (_, index) => (
+          <article
             key={index}
-            className="h-[420px] rounded-[30px] border border-border bg-muted/30"
-          />
+            className="rounded-[30px] bg-foreground/[.035] p-1.5 ring-1 ring-foreground/10"
+          >
+            <div className="overflow-hidden rounded-[calc(30px-.375rem)] bg-card">
+              <Skeleton className="aspect-[1.18] w-full rounded-none" />
+              <div className="p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <Skeleton className="h-5 w-4/5" />
+                    <Skeleton className="mt-2 h-4 w-3/5" />
+                  </div>
+                  <Skeleton className="size-9 shrink-0 rounded-full" />
+                </div>
+                <div className="mt-6 flex items-end justify-between gap-4 border-t border-border pt-5">
+                  <div>
+                    <Skeleton className="h-3 w-16" />
+                    <Skeleton className="mt-2 h-5 w-24" />
+                  </div>
+                  <Skeleton className="h-8 w-20 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </article>
         ))}
       </div>
     </section>

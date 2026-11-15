@@ -1,10 +1,10 @@
 // Checkout confirmation page — server reads the account and pricing, client form
 // owns method selection, voucher preview, and the actual checkout action.
 
-import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, LockKeyhole } from 'lucide-react'
 import { checkoutService } from '@/src/services/checkout.service'
+import { BackToCatalog } from '@/components/storefront/back-to-catalog'
 import { CheckoutForm } from '@/components/storefront/checkout-form'
 
 export const instant = false
@@ -27,24 +27,18 @@ export default async function CheckoutPage({
       <div className="mx-auto max-w-2xl px-5 pb-24 pt-16 text-center">
         <h1 className="font-display text-3xl font-bold tracking-tight">Checkout cannot continue yet</h1>
         <p className="mt-3 text-sm text-muted-foreground">{result.message}</p>
-        <Link
-          href="/"
-          className="mt-6 inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-brand-ink"
-        >
+        <BackToCatalog className="mt-6 inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-brand-ink">
           Back to catalog
-        </Link>
+        </BackToCatalog>
       </div>
     )
   }
 
   return (
     <div className="mx-auto max-w-[1240px] px-5 pb-20 pt-10 sm:px-8 sm:pt-14 lg:px-12">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-2 text-xs font-bold text-muted-foreground transition hover:text-foreground"
-      >
+      <BackToCatalog className="inline-flex items-center gap-2 text-xs font-bold text-muted-foreground transition hover:text-foreground">
         <ArrowLeft className="size-4" /> Back to catalog
-      </Link>
+      </BackToCatalog>
 
       <div className="mt-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>

@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { BackToCatalog } from '@/components/storefront/back-to-catalog'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useTransition } from 'react'
 import {
@@ -499,12 +500,9 @@ export function PaymentExperience({
             <h2 className="mt-4 font-display text-2xl font-bold tracking-tight">{meta.label}</h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{meta.hint}</p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                href="/"
-                className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink"
-              >
+              <BackToCatalog className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink">
                 Browse other accounts <ArrowRight className="size-4" />
-              </Link>
+              </BackToCatalog>
               <Link
                 href="/orders"
                 className="inline-flex h-11 items-center gap-2 rounded-xl border border-border px-5 text-sm font-bold"

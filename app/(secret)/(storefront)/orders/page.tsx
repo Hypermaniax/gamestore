@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowRight, Inbox, ShoppingBag } from 'lucide-react'
 import { transactionService } from '@/src/services/transaction.service'
+import { BackToCatalog } from '@/components/storefront/back-to-catalog'
 import { StatusBadge } from '@/components/pesanan/status-badge'
 import { rupiah, tanggalPendek, type PesananListItem } from '@/src/lib/pesanan'
 import { PaginationLinks } from '@/components/storefront/pagination-controls'
@@ -57,12 +58,9 @@ export default async function PesananPage({
             Continue payment, reveal credentials, or check the status of completed orders.
           </p>
         </div>
-        <Link
-          href="/"
-          className="inline-flex h-11 w-fit items-center gap-2 rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink transition hover:brightness-105"
-        >
+        <BackToCatalog className="inline-flex h-11 w-fit items-center gap-2 rounded-xl bg-brand px-5 text-sm font-bold text-brand-ink transition hover:brightness-105">
           <ShoppingBag className="size-4" /> Find an account
-        </Link>
+        </BackToCatalog>
       </div>
 
       <div className="hide-scrollbar mt-8 flex gap-2 overflow-x-auto">
@@ -139,12 +137,9 @@ export default async function PesananPage({
             <EmptyDescription>Accounts you buy will appear here.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Link
-              href="/"
-              className="inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-brand-ink"
-            >
+            <BackToCatalog className="inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-brand-ink">
               Browse catalog
-            </Link>
+            </BackToCatalog>
           </EmptyContent>
         </Empty>
       )}

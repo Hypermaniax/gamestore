@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowUpRight, ChevronRight, ShieldCheck } from 'lucide-react'
+import { BackToCatalog } from '@/components/storefront/back-to-catalog'
 import { Markdown } from '@/components/storefront/markdown'
 import { pageService } from '@/src/services/page.service'
 import { HELP_TOPICS, findHelpTopic, helpHref } from '@/src/lib/help'
@@ -49,9 +50,9 @@ export default async function StaticPage({ params }: Props) {
         aria-label="Breadcrumb"
         className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-muted-foreground"
       >
-        <Link href="/" className="transition hover:text-foreground">
+        <BackToCatalog className="transition hover:text-foreground">
           Catalog
-        </Link>
+        </BackToCatalog>
         <ChevronRight className="size-3" />
         <Link href="/help" className="transition hover:text-foreground">
           Help & policies

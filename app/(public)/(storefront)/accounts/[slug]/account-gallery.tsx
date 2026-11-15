@@ -31,7 +31,7 @@ export function AccountGallery({
               src={cover}
               alt={`Photo ${active + 1} of ${game} account`}
               fill
-              priority
+              loading="eager"
               sizes="(min-width: 1024px) 860px, 100vw"
               className="object-cover transition duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-[1.015]"
             />

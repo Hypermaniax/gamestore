@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft, ArrowUpRight, FileText, HelpCircle, LockKeyhole, ShieldCheck } from 'lucide-react'
+import { BackToCatalog } from '@/components/storefront/back-to-catalog'
 import { pageService } from '@/src/services/page.service'
 import { HELP_TOPICS, helpHref } from '@/src/lib/help'
 
@@ -36,12 +37,9 @@ export default async function HelpPage() {
 
   return (
     <div className="mx-auto max-w-[1180px] px-5 pb-24 pt-10 sm:px-8 sm:pt-14 lg:px-12">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-2 text-xs font-bold text-muted-foreground transition hover:text-foreground"
-      >
+      <BackToCatalog className="inline-flex items-center gap-2 text-xs font-bold text-muted-foreground transition hover:text-foreground">
         <ArrowLeft className="size-4" /> Back to catalog
-      </Link>
+      </BackToCatalog>
 
       <header className="mt-8 grid gap-10 border-b border-border pb-12 lg:grid-cols-[1.1fr_.9fr] lg:items-end">
         <div>

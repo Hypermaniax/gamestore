@@ -131,7 +131,7 @@ export function Hero() {
                 src="https://images.unsplash.com/photo-1607896426171-99097eb60cb6?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=90&w=1200&h=1450"
                 alt="Neon-lit gaming setup"
                 fill
-                priority
+                loading="eager"
                 sizes="(min-width: 1024px) 620px, 100vw"
                 className="object-cover opacity-90"
               />

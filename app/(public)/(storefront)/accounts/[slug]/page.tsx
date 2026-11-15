@@ -1,7 +1,6 @@
 // Public account detail. The checkout form lives on the same page so a buyer can
 // inspect the account and continue straight to payment without another hop.
 
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
   ArrowLeft,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react'
 import { checkoutService } from '@/src/services/checkout.service'
 import { rupiah } from '@/src/lib/pesanan'
+import { BackToCatalog } from '@/components/storefront/back-to-catalog'
 import { AccountGallery } from './account-gallery'
 import { DetailCheckoutButton, MobileCheckoutBar } from './detail-cta'
 
@@ -33,12 +33,9 @@ export default async function AccountDetailPage({
       <div className="mx-auto max-w-2xl px-5 pb-24 pt-16 text-center">
         <h1 className="font-display text-3xl font-bold tracking-tight">Account details are not available yet</h1>
         <p className="mt-3 text-sm text-muted-foreground">{result.message}</p>
-        <Link
-          href="/"
-          className="mt-6 inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-brand-ink"
-        >
+        <BackToCatalog className="mt-6 inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-brand-ink">
           Back to catalog
-        </Link>
+        </BackToCatalog>
       </div>
     )
   }
@@ -52,23 +49,20 @@ export default async function AccountDetailPage({
   return (
     <div className="mx-auto max-w-[1440px] px-5 pb-32 pt-8 sm:px-8 sm:pt-12 lg:px-12 lg:pb-24">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <Link
-          href="/#catalog"
-          className="group inline-flex items-center gap-2.5 text-xs font-bold text-muted-foreground transition hover:text-foreground"
-        >
+        <BackToCatalog className="group inline-flex items-center gap-2.5 text-xs font-bold text-muted-foreground transition hover:text-foreground">
           <span className="grid size-8 place-items-center rounded-full border border-border transition duration-300 group-hover:border-foreground/30 group-hover:bg-card">
             <ArrowLeft className="size-3.5" strokeWidth={1.75} />
           </span>
           Back to catalog
-        </Link>
+        </BackToCatalog>
 
         <nav
           aria-label="Breadcrumb"
           className="hidden items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-muted-foreground sm:flex"
         >
-          <Link href="/" className="transition hover:text-foreground">
+          <BackToCatalog className="transition hover:text-foreground">
             Catalog
-          </Link>
+          </BackToCatalog>
           <span className="text-border">/</span>
           <span>{data.account.game}</span>
           <span className="text-border">/</span>

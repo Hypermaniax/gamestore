@@ -1,5 +1,5 @@
-import Link from 'next/link'
 import { FileQuestion } from 'lucide-react'
+import { BackToCatalog } from '@/components/storefront/back-to-catalog'
 
 export default function HalamanNotFound() {
   return (
@@ -11,12 +11,9 @@ export default function HalamanNotFound() {
       <p className="mt-3 text-sm text-muted-foreground">
         The page you are looking for is not available yet or has been replaced.
       </p>
-      <Link
-        href="/"
-        className="mt-6 inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-brand-ink"
-      >
+      <BackToCatalog className="mt-6 inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-brand-ink">
         Back to catalog
-      </Link>
+      </BackToCatalog>
     </div>
   )
 }
